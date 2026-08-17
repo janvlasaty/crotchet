@@ -65,37 +65,39 @@ export const HomeScreen: React.FC = () => {
         )}
       </div>
 
-      {showSearch ? (
-        <div className="search-results">
-          {searchResults.length === 0 ? (
-            <div className="empty-state">Nic nenalezeno</div>
-          ) : (
-            searchResults.map(s => (
-              <SongListItem key={s.id} song={s} onClick={() => navigate(`/play/${s.id}`)} />
-            ))
-          )}
-        </div>
-      ) : (
-        <>
-          {recentSongs.length > 0 && (
-            <section className="home-section">
-              <h2>Naposledy hrané</h2>
-              {recentSongs.map(s => (
+      <div className="home-scroll">
+        {showSearch ? (
+          <div className="search-results">
+            {searchResults.length === 0 ? (
+              <div className="empty-state">Nic nenalezeno</div>
+            ) : (
+              searchResults.map(s => (
                 <SongListItem key={s.id} song={s} onClick={() => navigate(`/play/${s.id}`)} />
-              ))}
-            </section>
-          )}
+              ))
+            )}
+          </div>
+        ) : (
+          <>
+            {recentSongs.length > 0 && (
+              <section className="home-section">
+                <h2>Naposledy hrané</h2>
+                {recentSongs.map(s => (
+                  <SongListItem key={s.id} song={s} onClick={() => navigate(`/play/${s.id}`)} />
+                ))}
+              </section>
+            )}
 
-          <section className="home-section">
-            <h2>Všechny písně</h2>
-            {songs
-              .sort((a, b) => a.index.title.localeCompare(b.index.title, 'cs'))
-              .map(s => (
-                <SongListItem key={s.id} song={s} onClick={() => navigate(`/play/${s.id}`)} />
-              ))}
-          </section>
-        </>
-      )}
+            <section className="home-section">
+              <h2>Všechny písně</h2>
+              {songs
+                .sort((a, b) => a.index.title.localeCompare(b.index.title, 'cs'))
+                .map(s => (
+                  <SongListItem key={s.id} song={s} onClick={() => navigate(`/play/${s.id}`)} />
+                ))}
+            </section>
+          </>
+        )}
+      </div>
 
       <nav className="bottom-nav">
         <button className="nav-btn active">🏠</button>
