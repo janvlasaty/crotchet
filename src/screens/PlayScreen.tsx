@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { getSong, getSongPrefs, saveSongPrefs, recordPlay } from '../lib/db';
+import { useParams, useNavigate } from 'react-router-dom';
+import { getSong, getSongPrefs, saveSongPrefs, recordPlay, getAllSongs } from '../lib/db';
 import { parseChordPro, extractChords } from '../lib/parser';
 import { transposeKey } from '../lib/transpose';
 import { playReferenceTone, Metronome, playClick } from '../lib/audio';
@@ -13,14 +13,16 @@ const metronome = new Metronome();
 export const PlayScreen: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const [song, setSong] = useState<Song | null>(null);
   const [prefs, setPrefs] = useState<SongPrefs | null>(null);
   const [showPrep, setShowPrep] = useState(false);
   const [metronomeOn, setMetronomeOn] = useState(false);
   const [autoScrolling, setAutoScrolling] = useState(false);
+  const [songEnded, setSongEnded] = useState(false);
+  const [recommendations, setRecommendations] = useState<Song[]>([]);
   const contentRef = useRef<HTMLDivElement>(null);
-  const scrollIntervalRef = useRef<number | null>(null);
+  const scrollAnimRef = useRef<number | null>(null);
+  const scrollStartRef = useRef<number>(0);
 
   useWakeLock();
 
@@ -32,6 +34,12 @@ export const PlayScreen: React.FC = () => {
         setPrefs(p);
         recordPlay(id);
       }
+    });
+    // Load recommendations (random other songs)
+    getAllSongs().then(allSongs => {
+      const others = allSongs.filter(s => s.id !== id);
+      const shuffled = others.sort(() => Math.random() - 0.5);
+      setRecommendations(shuffled.slice(0, 3));
     });
   }, [id]);
 
@@ -63,37 +71,67 @@ export const PlayScreen: React.FC = () => {
     setMetronomeOn(!metronomeOn);
   }, [metronomeOn, prefs, parsed]);
 
+  const stopScroll = useCallback(() => {
+    if (scrollAnimRef.current) {
+      cancelAnimationFrame(scrollAnimRef.current);
+      scrollAnimRef.current = null;
+    }
+  }, []);
+
   const handleToggleScroll = useCallback(() => {
     if (autoScrolling) {
-      if (scrollIntervalRef.current) {
-        clearInterval(scrollIntervalRef.current);
-        scrollIntervalRef.current = null;
-      }
+      stopScroll();
     } else {
       const bpm = prefs?.tempo || parsed?.tempo || 100;
-      const intervalMs = (60000 / bpm) * 4; // scroll every 4 beats
-      scrollIntervalRef.current = window.setInterval(() => {
-        contentRef.current?.scrollBy({ top: 60, behavior: 'smooth' });
-      }, intervalMs);
+      // pixels per second: at 100 BPM we want ~25px/s, scale linearly
+      const pxPerSec = bpm * 0.25;
+      scrollStartRef.current = performance.now();
+      let lastTime = scrollStartRef.current;
+
+      const tick = (now: number) => {
+        const el = contentRef.current;
+        if (!el) return;
+        const dt = (now - lastTime) / 1000;
+        lastTime = now;
+        el.scrollTop += pxPerSec * dt;
+
+        // Check if reached end
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 10) {
+          setSongEnded(true);
+          setAutoScrolling(false);
+          scrollAnimRef.current = null;
+          return;
+        }
+        scrollAnimRef.current = requestAnimationFrame(tick);
+      };
+      scrollAnimRef.current = requestAnimationFrame(tick);
     }
     setAutoScrolling(!autoScrolling);
-  }, [autoScrolling, prefs, parsed]);
+  }, [autoScrolling, prefs, parsed, stopScroll]);
 
   const handleScrollToTop = useCallback(() => {
     contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    setSongEnded(false);
     if (autoScrolling) {
-      // Reset autoscroll
-      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
-      scrollIntervalRef.current = null;
+      stopScroll();
       setAutoScrolling(false);
     }
-  }, [autoScrolling]);
+  }, [autoScrolling, stopScroll]);
 
   useEffect(() => {
     return () => {
       metronome.stop();
-      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+      if (scrollAnimRef.current) cancelAnimationFrame(scrollAnimRef.current);
     };
+  }, []);
+
+  // Detect when user scrolls to end
+  const handleScroll = useCallback(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 30) {
+      setSongEnded(true);
+    }
   }, []);
 
   // Prep panel handlers
@@ -170,11 +208,10 @@ export const PlayScreen: React.FC = () => {
       <div
         className="play-content"
         ref={contentRef}
+        onScroll={handleScroll}
         onTouchStart={() => {
-          // Touch = instant pause of autoscroll
           if (autoScrolling) {
-            if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
-            scrollIntervalRef.current = null;
+            stopScroll();
             setAutoScrolling(false);
           }
         }}
@@ -186,6 +223,17 @@ export const PlayScreen: React.FC = () => {
           chordsVisible={prefs.chordsVisible}
           fontScale={prefs.fontScale}
         />
+        {songEnded && recommendations.length > 0 && (
+          <div className="song-recommendations">
+            <h3>Další písně</h3>
+            {recommendations.map(r => (
+              <div key={r.id} className="recommendation-item" onClick={() => navigate(`/play/${r.id}`)}>
+                <span className="rec-title">{r.index.title}</span>
+                <span className="rec-artist">{r.index.artist}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Bottom controls — 3 buttons only */}

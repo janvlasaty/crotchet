@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAllSongs, getRecentPlays, getSong } from '../lib/db';
 import { initSearch, search as doSearch } from '../lib/search';
+import { applyUpdate } from '../lib/version';
 import type { Song, PlayRecord } from '../types';
 
 export const HomeScreen: React.FC = () => {
@@ -94,6 +95,9 @@ export const HomeScreen: React.FC = () => {
                 .map(s => (
                   <SongListItem key={s.id} song={s} onClick={() => navigate(`/play/${s.id}`)} />
                 ))}
+              <button className="reload-btn" onClick={() => applyUpdate()}>
+                Obnovit aplikaci
+              </button>
             </section>
           </>
         )}

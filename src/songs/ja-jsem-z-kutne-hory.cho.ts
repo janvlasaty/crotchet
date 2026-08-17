@@ -1,6 +1,7 @@
 export const songContent = `{title: Já jsem z Kutné Hory}
 {artist: Lidová}
 {key: C}
+{tempo: 120}
 
 {start_of_chorus}
 [C]Já jsem z Kutné [G]Hory,
@@ -23,9 +24,30 @@ export const songContent = `{title: Já jsem z Kutné Hory}
 [G]zpívají a [C]tančí.
 {end_of_verse}
 
+{start_of_chorus}
+[C]Já jsem z Kutné [G]Hory,
+[G]znáte mě, [C]znáte mě,
+[C]já jsem z Kutné [G]Hory,
+[G]znáte mě [C]všichni.
+{end_of_chorus}
+
 {start_of_verse}
 [C]Až se vrátím [G]domů,
 [G]do Kutné [C]Hory,
 [C]všichni se mě [G]ptají,
 [G]kde jsem tak [C]dlouho byl.
-{end_of_verse}`;
+{end_of_verse}
+
+{start_of_verse}
+[C]Byl jsem v širém [G]světě,
+[G]ale vrátil [C]se jsem,
+[C]protože v Kutné [G]Hoře,
+[G]je mi nejlíp [C]ze všech.
+{end_of_verse}
+
+{start_of_chorus}
+[C]Já jsem z Kutné [G]Hory,
+[G]znáte mě, [C]znáte mě,
+[C]já jsem z Kutné [G]Hory,
+[G]znáte mě [C]všichni.
+{end_of_chorus}`;

@@ -1,6 +1,7 @@
 export const songContent = `{title: Šel zahradník do zahrady}
 {artist: Lidová}
 {key: F}
+{tempo: 115}
 
 {start_of_verse}
 [F]Šel zahradník [C]do zahrady,
@@ -21,4 +22,25 @@ export const songContent = `{title: Šel zahradník do zahrady}
 [C]komu by ho [F]daroval,
 [F]dal ho svojí [Bb]zahradnici,
 [C]té, co nosí [F]copy zlatý.
+{end_of_verse}
+
+{start_of_chorus}
+[F]Salát, salát, [C]salátek,
+[C]šel zahradník [F]na záhonek,
+[F]salát, salát, [Bb]salátek,
+[C]natrhal ho [F]plný sáček.
+{end_of_chorus}
+
+{start_of_verse}
+[F]Zahradnice [C]děkovala,
+[C]hezky se mu [F]uklonila,
+[F]za ten salát [Bb]zelený,
+[C]dala mu rů[F]ži z květin.
+{end_of_verse}
+
+{start_of_verse}
+[F]Šel zahradník [C]domů rád,
+[C]s růží v ruce [F]usmíval se,
+[F]zítra půjde [Bb]znova tam,
+[C]natrhat jí [F]salát zas.
 {end_of_verse}`;

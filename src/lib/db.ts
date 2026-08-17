@@ -166,12 +166,9 @@ export async function deleteSetlist(id: string): Promise<void> {
   await db.delete('setlists', id);
 }
 
-/** Seed songs from static .cho files on first launch */
+/** Seed songs from static .cho files — always update to latest content */
 export async function seedSongsIfNeeded(songs: Array<{ id: string; chordpro: string }>): Promise<void> {
   const db = await getDB();
-  const existing = await db.count('songs');
-  if (existing > 0) return;
-
   const tx = db.transaction('songs', 'readwrite');
   for (const { id, chordpro } of songs) {
     const index = buildSongIndex(id, chordpro);
