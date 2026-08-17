@@ -7,6 +7,9 @@ let audioCtx: AudioContext | null = null;
 
 function getAudioCtx(): AudioContext {
   if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
   return audioCtx;
 }
 
@@ -66,11 +69,14 @@ export function playReferenceTone(chord: string): void {
   });
 }
 
-/** Metronome class that ticks at a given BPM */
+/** Metronome class that ticks at a given BPM using Web Audio scheduling */
 export class Metronome {
-  private intervalId: number | null = null;
+  private timerId: number | null = null;
   private _bpm: number = 120;
   private _running = false;
+  private nextNoteTime = 0;
+  private readonly scheduleAheadTime = 0.1; // seconds
+  private readonly lookAhead = 25; // ms
 
   get bpm() { return this._bpm; }
   set bpm(v: number) {
@@ -86,15 +92,25 @@ export class Metronome {
   start() {
     if (this._running) return;
     this._running = true;
-    playClick();
-    this.intervalId = window.setInterval(() => playClick(), 60000 / this._bpm);
+    const ctx = getAudioCtx();
+    this.nextNoteTime = ctx.currentTime;
+    this.scheduler();
+  }
+
+  private scheduler() {
+    const ctx = getAudioCtx();
+    while (this.nextNoteTime < ctx.currentTime + this.scheduleAheadTime) {
+      playClick(this.nextNoteTime);
+      this.nextNoteTime += 60.0 / this._bpm;
+    }
+    this.timerId = window.setTimeout(() => this.scheduler(), this.lookAhead);
   }
 
   stop() {
     this._running = false;
-    if (this.intervalId !== null) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+    if (this.timerId !== null) {
+      clearTimeout(this.timerId);
+      this.timerId = null;
     }
   }
 
