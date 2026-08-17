@@ -1,24 +1,46 @@
 export const songContent = `{title: Kočka leze dírou}
 {artist: Lidová}
-{key: G}
+{key: C}
+{tempo: 100}
 
 {start_of_verse}
-[G]Kočka leze [D]dírou,
-[D]pes oknem, [G]pes oknem,
-[G]kočka leze [D]dírou,
-[D]pes ok[G]nem.
+[C]Kočka leze [G]dírou,
+[G]pes oknem, [C]pes oknem,
+[C]kočka leze [G]dírou,
+[G]pes ok[C]nem.
 {end_of_verse}
 
 {start_of_verse}
-[G]Nebude-li [D]pršet,
-[D]nezmoknem, [G]nezmoknem,
-[G]nebude-li [D]pršet,
-[D]nezmo[G]knem.
+[C]Nebude-li [G]pršet,
+[G]nezmoknem, [C]nezmoknem,
+[C]nebude-li [G]pršet,
+[G]nezmo[C]knem.
 {end_of_verse}
 
 {start_of_verse}
-[G]Kočka leze [D]dírou,
-[D]pes oknem, [G]pes oknem,
-[G]má-li kočka [D]díru,
-[D]proč by lezla [G]oknem.
+[C]Kočka leze [G]dírou,
+[G]pes oknem, [C]pes oknem,
+[C]má dlouhé [G]vousy,
+[G]drápe [C]ostré.
+{end_of_verse}
+
+{start_of_verse}
+[C]Myšky se jí [G]bojí,
+[G]schovají se, [C]schovají se,
+[C]myšky se jí [G]bojí,
+[G]schova[C]jí se.
+{end_of_verse}
+
+{start_of_verse}
+[C]Kočka leze [G]dírou,
+[G]pes oknem, [C]pes oknem,
+[C]kočka leze [G]dírou,
+[G]pes ok[C]nem.
+{end_of_verse}
+
+{start_of_verse}
+[C]Nebude-li [G]pršet,
+[G]nezmoknem, [C]nezmoknem,
+[C]nebude-li [G]pršet,
+[G]nezmo[C]knem.
 {end_of_verse}`;

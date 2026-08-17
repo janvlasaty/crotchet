@@ -1,6 +1,7 @@
 export const songContent = `{title: Pod naším okýnkem}
 {artist: Lidová}
 {key: G}
+{tempo: 100}
 
 {start_of_verse}
 [G]Pod naším okýnkem [D]teče vodička,
@@ -19,4 +20,25 @@ export const songContent = `{title: Pod naším okýnkem}
 [D]až ten potůček [G]přeschne,
 [G]bude chodit [D]jinam,
 [D]já půjdu za [G]ní.
+{end_of_verse}
+
+{start_of_verse}
+[G]Pod naším okýnkem [D]roste lípa,
+[D]pod tou lípou [G]lavička.
+[G]Sedáváme [D]na ní spolu,
+[D]já a moje [G]milá.
+{end_of_verse}
+
+{start_of_verse}
+[G]Když přijde [D]večer tichý,
+[D]hvězdy svítí [G]nám,
+[G]pod naším okýnkem [D]je nám hezky,
+[D]nikam nechcem [G]jít.
+{end_of_verse}
+
+{start_of_verse}
+[G]Pod naším okýnkem [D]teče vodička,
+[D]teče, teče, [G]teče vodička.
+[G]A my se tam [D]máme rádi,
+[D]pod naším o[G]kýnkem.
 {end_of_verse}`;

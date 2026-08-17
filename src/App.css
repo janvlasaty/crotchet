@@ -291,6 +291,9 @@ body {
 /* Song rendering */
 .song-content {
   line-height: 1.4;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-wrap: break-word;
 }
 
 .section {
@@ -611,4 +614,63 @@ body {
   overflow-y: auto;
   padding: 0 max(20px, var(--sar)) calc(80px + var(--sab)) max(20px, var(--sal));
   overscroll-behavior-y: contain;
+}
+
+/* Song recommendations */
+.song-recommendations {
+  margin-top: 32px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+
+.song-recommendations h3 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.recommendation-item {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.recommendation-item:active {
+  background: var(--accent-dim);
+}
+
+.rec-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.rec-artist {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Force reload button */
+.reload-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  margin-top: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.reload-btn:active {
+  background: var(--accent-dim);
+  color: var(--accent);
 }
