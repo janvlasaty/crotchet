@@ -60,7 +60,9 @@ export const SetlistScreen: React.FC = () => {
               <div className="setlist-name">{sl.name}</div>
               <div className="setlist-count">{sl.songIds.length} písní</div>
             </div>
-            <button className="delete-btn" onClick={() => handleDelete(sl.id)}>🗑</button>
+            <button className="delete-btn" onClick={() => handleDelete(sl.id)} aria-label="Smazat">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>
           </div>
         ))}
         {setlists.length === 0 && (
@@ -69,8 +71,12 @@ export const SetlistScreen: React.FC = () => {
       </div>
 
       <nav className="bottom-nav">
-        <button className="nav-btn" onClick={() => navigate('/')}>🏠</button>
-        <button className="nav-btn active">📋</button>
+        <button className="nav-btn" onClick={() => navigate('/')} aria-label="Domů">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </button>
+        <button className="nav-btn active" aria-label="Setlisty">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        </button>
       </nav>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getSong, getSongPrefs, saveSongPrefs, recordPlay, getAllSongs } from '../lib/db';
+import { getSong, getSongPrefs, saveSongPrefs, recordPlay, getAllSongs, getRecentPlays, saveAppSettings } from '../lib/db';
 import { parseChordPro, extractChords } from '../lib/parser';
 import { transposeKey } from '../lib/transpose';
 import { playReferenceTone, Metronome, playClick } from '../lib/audio';
@@ -20,6 +20,7 @@ export const PlayScreen: React.FC = () => {
   const [autoScrolling, setAutoScrolling] = useState(false);
   const [songEnded, setSongEnded] = useState(false);
   const [recommendations, setRecommendations] = useState<Song[]>([]);
+  const [scrollProgress, setScrollProgress] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollAnimRef = useRef<number | null>(null);
   const scrollStartRef = useRef<number>(0);
@@ -35,9 +36,11 @@ export const PlayScreen: React.FC = () => {
         recordPlay(id);
       }
     });
-    // Load recommendations (random other songs)
-    getAllSongs().then(allSongs => {
-      const others = allSongs.filter(s => s.id !== id);
+    // Load recommendations (random songs, excluding recently played)
+    Promise.all([getAllSongs(), getRecentPlays(10)]).then(([allSongs, recentPlays]) => {
+      const recentIds = new Set(recentPlays.map(p => p.songId));
+      recentIds.add(id!);
+      const others = allSongs.filter(s => !recentIds.has(s.id));
       const shuffled = others.sort(() => Math.random() - 0.5);
       setRecommendations(shuffled.slice(0, 3));
     });
@@ -58,6 +61,7 @@ export const PlayScreen: React.FC = () => {
     const updated = { ...prefs, chordsVisible: !prefs.chordsVisible };
     setPrefs(updated);
     saveSongPrefs(updated);
+    saveAppSettings({ fontScale: updated.fontScale, chordsVisible: updated.chordsVisible });
   }, [prefs]);
 
   const handleToggleMetronome = useCallback(() => {
@@ -129,6 +133,10 @@ export const PlayScreen: React.FC = () => {
   const handleScroll = useCallback(() => {
     const el = contentRef.current;
     if (!el) return;
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    if (maxScroll > 0) {
+      setScrollProgress(el.scrollTop / maxScroll);
+    }
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 30) {
       setSongEnded(true);
     }
@@ -154,6 +162,7 @@ export const PlayScreen: React.FC = () => {
     const updated = { ...prefs, fontScale: scale };
     setPrefs(updated);
     saveSongPrefs(updated);
+    saveAppSettings({ fontScale: scale, chordsVisible: updated.chordsVisible });
   }, [prefs]);
 
   const handleSetTempo = useCallback((tempo: number) => {
@@ -185,8 +194,8 @@ export const PlayScreen: React.FC = () => {
         {prefs.capo !== null && prefs.capo > 0 && (
           <span className="play-capo">kapo {prefs.capo}</span>
         )}
-        <button className="prep-btn" onClick={(e) => { e.stopPropagation(); setShowPrep(!showPrep); }}>
-          ⚙
+        <button className="prep-btn" onClick={(e) => { e.stopPropagation(); setShowPrep(!showPrep); }} aria-label="Nastavení">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1.08 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1.08z"/></svg>
         </button>
       </div>
 
@@ -236,28 +245,40 @@ export const PlayScreen: React.FC = () => {
         )}
       </div>
 
-      {/* Bottom controls — 3 buttons only */}
+      {/* Autoscroll position indicator */}
+      {autoScrolling && (
+        <div
+          className="scroll-indicator"
+          style={{ top: `${60 + scrollProgress * (window.innerHeight - 130)}px` }}
+        />
+      )}
+
+      {/* Bottom controls */}
       <div className="play-controls">
         <button
           className={`control-btn ${autoScrolling ? 'active' : ''}`}
           onClick={handleToggleScroll}
           title="Autoscroll"
         >
-          {autoScrolling ? '⏸' : '▶'}
+          {autoScrolling ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          )}
         </button>
         <button
           className={`control-btn ${prefs.chordsVisible ? 'active' : ''}`}
           onClick={handleToggleChords}
           title="Akordy"
         >
-          ♫
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
         </button>
         <button
           className={`control-btn ${metronomeOn ? 'active' : ''}`}
           onClick={handleToggleMetronome}
           title="Metronom"
         >
-          ⏱
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L8 22h8L12 2z"/><line x1="12" y1="8" x2="18" y2="4"/></svg>
         </button>
       </div>
     </div>
@@ -335,7 +356,7 @@ const PrepPanel: React.FC<PrepPanelProps> = ({
       {firstChord && (
         <div className="prep-section">
           <button className="ref-tone-btn" onClick={() => playReferenceTone(firstChord)}>
-            🔊 Referenční tón ({firstChord})
+            🔉 Referenční tón ({firstChord})
           </button>
         </div>
       )}

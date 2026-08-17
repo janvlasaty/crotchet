@@ -1,12 +1,12 @@
 /* Zpěvník — dark-first, mobile-first styles */
 
 :root {
-  --bg: #0f0f0f;
-  --bg-surface: #1a1a1a;
-  --bg-elevated: #252525;
-  --text: #e0e0e0;
+  --bg: #000000;
+  --bg-surface: #111111;
+  --bg-elevated: #1a1a1a;
+  --text: #ffffff;
   --text-muted: #888;
-  --text-chord: rgba(255, 255, 255, 0.35);
+  --text-chord: #ff9800;
   --accent: #4fc3f7;
   --accent-dim: rgba(79, 195, 247, 0.15);
   --border: #333;
@@ -204,7 +204,7 @@ body {
   display: flex;
   background: var(--bg-surface);
   border-top: 1px solid var(--border);
-  padding: 0 max(0px, var(--sal)) var(--sab) max(0px, var(--sar));
+  padding: 0 max(0px, var(--sal)) max(8px, var(--sab)) max(0px, var(--sar));
 }
 
 .nav-btn {
@@ -215,7 +215,7 @@ body {
   font-size: 20px;
   cursor: pointer;
   opacity: 0.5;
-  min-height: 44px;
+  min-height: 48px;
 }
 
 .nav-btn.active {
@@ -361,7 +361,7 @@ body {
   display: flex;
   background: var(--bg-surface);
   border-top: 1px solid var(--border);
-  padding: 0 max(0px, var(--sal)) var(--sab) max(0px, var(--sar));
+  padding: 0 max(0px, var(--sal)) max(8px, var(--sab)) max(0px, var(--sar));
   z-index: 20;
 }
 
@@ -673,4 +673,24 @@ body {
 .reload-btn:active {
   background: var(--accent-dim);
   color: var(--accent);
+}
+
+.reload-version {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+
+/* Autoscroll position indicator */
+.scroll-indicator {
+  position: fixed;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.5;
+  z-index: 15;
+  pointer-events: none;
+  transition: top 0.1s linear;
 }

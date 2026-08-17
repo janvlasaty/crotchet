@@ -102,17 +102,39 @@ export async function deleteSong(id: string): Promise<void> {
   await db.delete('songs', id);
 }
 
-/** Get or create song prefs */
+/** Global app settings stored in localStorage */
+export interface AppSettings {
+  fontScale: number;
+  chordsVisible: boolean;
+}
+
+const APP_SETTINGS_KEY = 'zpevnik-settings';
+
+export function getAppSettings(): AppSettings {
+  try {
+    const raw = localStorage.getItem(APP_SETTINGS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { fontScale: 1, chordsVisible: true };
+}
+
+export function saveAppSettings(settings: AppSettings): void {
+  localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+/** Get or create song prefs (uses global defaults) */
 export async function getSongPrefs(songId: string): Promise<SongPrefs> {
   const db = await getDB();
   const prefs = await db.get('prefs', songId);
-  return prefs || {
+  if (prefs) return prefs;
+  const defaults = getAppSettings();
+  return {
     songId,
     transpose: 0,
     capo: null,
-    fontScale: 1,
+    fontScale: defaults.fontScale,
     tempo: null,
-    chordsVisible: true,
+    chordsVisible: defaults.chordsVisible,
   };
 }
 
