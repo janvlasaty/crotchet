@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getAllSongs, getRecentPlays, getSong } from '../lib/db';
 import { initSearch, search as doSearch } from '../lib/search';
 import { applyUpdate } from '../lib/version';
+import { Home, ListMusic, X, RefreshCw } from 'lucide-react';
 import type { Song, PlayRecord } from '../types';
 
 export const HomeScreen: React.FC = () => {
@@ -62,7 +63,7 @@ export const HomeScreen: React.FC = () => {
           autoCorrect="off"
         />
         {query && (
-          <button className="clear-btn" onClick={() => setQuery('')}>✕</button>
+          <button className="clear-btn" onClick={() => setQuery('')}><X size={16} /></button>
         )}
       </div>
 
@@ -96,6 +97,7 @@ export const HomeScreen: React.FC = () => {
                   <SongListItem key={s.id} song={s} onClick={() => navigate(`/play/${s.id}`)} />
                 ))}
               <button className="reload-btn" onClick={() => applyUpdate()}>
+                <RefreshCw size={14} style={{ marginRight: 6, verticalAlign: -2 }} />
                 Obnovit aplikaci<span className="reload-version"> v{__APP_VERSION__}</span>
               </button>
             </section>
@@ -105,10 +107,12 @@ export const HomeScreen: React.FC = () => {
 
       <nav className="bottom-nav">
         <button className="nav-btn active" aria-label="Domů">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <Home size={22} strokeWidth={2.5} />
+          <span className="nav-label">Domů</span>
         </button>
         <button className="nav-btn" onClick={() => navigate('/setlists')} aria-label="Setlisty">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          <ListMusic size={22} strokeWidth={2.5} />
+          <span className="nav-label">Setlisty</span>
         </button>
       </nav>
     </div>

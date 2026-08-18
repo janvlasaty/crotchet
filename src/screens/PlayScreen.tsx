@@ -6,6 +6,7 @@ import { transposeKey } from '../lib/transpose';
 import { playReferenceTone, Metronome, playClick } from '../lib/audio';
 import { SongRenderer } from '../components/SongRenderer';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { ChevronLeft, Settings, Play, Pause, Music, Timer, Volume2 } from 'lucide-react';
 import type { Song, SongPrefs, ParseResult } from '../types';
 
 const metronome = new Metronome();
@@ -187,7 +188,7 @@ export const PlayScreen: React.FC = () => {
       {/* Header */}
       <div className="play-header" onClick={handleScrollToTop}>
         <button className="back-btn" onClick={(e) => { e.stopPropagation(); navigate(-1); }}>
-          ←
+          <ChevronLeft size={24} strokeWidth={2.5} />
         </button>
         <div className="play-title">
           <h1>{parsed.title}</h1>
@@ -198,7 +199,7 @@ export const PlayScreen: React.FC = () => {
           <span className="play-capo">kapo {prefs.capo}</span>
         )}
         <button className="prep-btn" onClick={(e) => { e.stopPropagation(); setShowPrep(!showPrep); }} aria-label="Nastavení">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1.08 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1.08z"/></svg>
+          <Settings size={20} strokeWidth={2.5} />
         </button>
       </div>
 
@@ -263,25 +264,21 @@ export const PlayScreen: React.FC = () => {
           onClick={handleToggleScroll}
           title="Autoscroll"
         >
-          {autoScrolling ? (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-          ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          )}
+          {autoScrolling ? <Pause size={20} strokeWidth={2.5} /> : <Play size={20} strokeWidth={2.5} />}
         </button>
         <button
           className={`control-btn ${prefs.chordsVisible ? 'active' : ''}`}
           onClick={handleToggleChords}
           title="Akordy"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          <Music size={20} strokeWidth={2.5} />
         </button>
         <button
           className={`control-btn ${metronomeOn ? 'active' : ''}`}
           onClick={handleToggleMetronome}
           title="Metronom"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L8 22h8L12 2z"/><line x1="12" y1="8" x2="18" y2="4"/></svg>
+          <Timer size={20} strokeWidth={2.5} />
         </button>
       </div>
     </div>
@@ -359,7 +356,7 @@ const PrepPanel: React.FC<PrepPanelProps> = ({
       {firstChord && (
         <div className="prep-section">
           <button className="ref-tone-btn" onClick={() => playReferenceTone(firstChord)}>
-            🔉 Referenční tón ({firstChord})
+            <Volume2 size={16} style={{ marginRight: 6, verticalAlign: -3 }} /> Referenční tón ({firstChord})
           </button>
         </div>
       )}
