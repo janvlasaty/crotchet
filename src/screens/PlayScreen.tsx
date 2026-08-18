@@ -22,8 +22,7 @@ export const PlayScreen: React.FC = () => {
   const [recommendations, setRecommendations] = useState<Song[]>([]);
   const [scrollProgress, setScrollProgress] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
-  const scrollAnimRef = useRef<number | null>(null);
-  const scrollStartRef = useRef<number>(0);
+  const scrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useWakeLock();
 
@@ -76,9 +75,9 @@ export const PlayScreen: React.FC = () => {
   }, [metronomeOn, prefs, parsed]);
 
   const stopScroll = useCallback(() => {
-    if (scrollAnimRef.current) {
-      cancelAnimationFrame(scrollAnimRef.current);
-      scrollAnimRef.current = null;
+    if (scrollIntervalRef.current) {
+      clearInterval(scrollIntervalRef.current);
+      scrollIntervalRef.current = null;
     }
   }, []);
 
@@ -86,29 +85,33 @@ export const PlayScreen: React.FC = () => {
     if (autoScrolling) {
       stopScroll();
     } else {
+      const el = contentRef.current;
+      if (!el) return;
       const bpm = prefs?.tempo || parsed?.tempo || 100;
-      // pixels per second: at 100 BPM we want ~25px/s, scale linearly
-      const pxPerSec = bpm * 0.25;
-      scrollStartRef.current = performance.now();
-      let lastTime = scrollStartRef.current;
+      // Compute line height from the actual rendered font size
+      const style = getComputedStyle(el);
+      const fontSize = parseFloat(style.fontSize) || 16;
+      const lineHeight = fontSize * 1.4; // matches .song-content line-height
+      // Scroll 3 rows at a time with smooth animation
+      const rowsPerJump = 3;
+      const jumpPx = Math.round(lineHeight * rowsPerJump);
+      // Interval: at 100 BPM jump every ~2.5s, scale inversely with tempo
+      const intervalMs = Math.max(800, Math.round(250000 / bpm));
 
-      const tick = (now: number) => {
-        const el = contentRef.current;
-        if (!el) return;
-        const dt = (now - lastTime) / 1000;
-        lastTime = now;
-        el.scrollTop += pxPerSec * dt;
+      const tick = () => {
+        const container = contentRef.current;
+        if (!container) return;
 
         // Check if reached end
-        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 10) {
+        if (container.scrollTop + container.clientHeight >= container.scrollHeight - 10) {
           setSongEnded(true);
           setAutoScrolling(false);
-          scrollAnimRef.current = null;
+          stopScroll();
           return;
         }
-        scrollAnimRef.current = requestAnimationFrame(tick);
+        container.scrollBy({ top: jumpPx, behavior: 'smooth' });
       };
-      scrollAnimRef.current = requestAnimationFrame(tick);
+      scrollIntervalRef.current = setInterval(tick, intervalMs);
     }
     setAutoScrolling(!autoScrolling);
   }, [autoScrolling, prefs, parsed, stopScroll]);
@@ -125,7 +128,7 @@ export const PlayScreen: React.FC = () => {
   useEffect(() => {
     return () => {
       metronome.stop();
-      if (scrollAnimRef.current) cancelAnimationFrame(scrollAnimRef.current);
+      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
     };
   }, []);
 
