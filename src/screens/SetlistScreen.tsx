@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getAllSetlists, saveSetlist, deleteSetlist, getAllSongs } from '../lib/db';
+import { Home, ListMusic, ChevronLeft, Plus, Trash2, ChevronUp, ChevronDown, X } from 'lucide-react';
 import type { Setlist, Song } from '../types';
 
 export const SetlistScreen: React.FC = () => {
@@ -33,9 +34,9 @@ export const SetlistScreen: React.FC = () => {
   return (
     <div className="screen setlist-screen">
       <header className="screen-header">
-        <button className="back-btn" onClick={() => navigate('/')}>←</button>
+        <button className="back-btn" onClick={() => navigate('/')}><ChevronLeft size={24} strokeWidth={2.5} /></button>
         <h1>Setlisty</h1>
-        <button className="add-btn" onClick={() => setShowCreate(true)}>+</button>
+        <button className="add-btn" onClick={() => setShowCreate(true)}><Plus size={24} strokeWidth={2.5} /></button>
       </header>
 
       {showCreate && (
@@ -61,7 +62,7 @@ export const SetlistScreen: React.FC = () => {
               <div className="setlist-count">{sl.songIds.length} písní</div>
             </div>
             <button className="delete-btn" onClick={() => handleDelete(sl.id)} aria-label="Smazat">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+              <Trash2 size={18} />
             </button>
           </div>
         ))}
@@ -72,10 +73,12 @@ export const SetlistScreen: React.FC = () => {
 
       <nav className="bottom-nav">
         <button className="nav-btn" onClick={() => navigate('/')} aria-label="Domů">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <Home size={22} strokeWidth={2.5} />
+          <span className="nav-label">Domů</span>
         </button>
         <button className="nav-btn active" aria-label="Setlisty">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          <ListMusic size={22} strokeWidth={2.5} />
+          <span className="nav-label">Setlisty</span>
         </button>
       </nav>
     </div>
@@ -137,9 +140,9 @@ export const SetlistDetailScreen: React.FC = () => {
   return (
     <div className="screen setlist-detail-screen">
       <header className="screen-header">
-        <button className="back-btn" onClick={() => navigate('/setlists')}>←</button>
+        <button className="back-btn" onClick={() => navigate('/setlists')}><ChevronLeft size={24} strokeWidth={2.5} /></button>
         <h1>{setlist.name}</h1>
-        <button className="add-btn" onClick={() => setShowAdd(!showAdd)}>+</button>
+        <button className="add-btn" onClick={() => setShowAdd(!showAdd)}><Plus size={24} strokeWidth={2.5} /></button>
       </header>
 
       {showAdd && (
@@ -163,9 +166,9 @@ export const SetlistDetailScreen: React.FC = () => {
               <div className="song-artist">{s.index.artist}</div>
             </div>
             <div className="song-actions">
-              {idx > 0 && <button onClick={() => handleMoveSong(idx, idx - 1)}>↑</button>}
-              {idx < songsInSetlist.length - 1 && <button onClick={() => handleMoveSong(idx, idx + 1)}>↓</button>}
-              <button onClick={() => handleRemoveSong(s.id)}>✕</button>
+              {idx > 0 && <button onClick={() => handleMoveSong(idx, idx - 1)}><ChevronUp size={16} /></button>}
+              {idx < songsInSetlist.length - 1 && <button onClick={() => handleMoveSong(idx, idx + 1)}><ChevronDown size={16} /></button>}
+              <button onClick={() => handleRemoveSong(s.id)}><X size={16} /></button>
             </div>
           </div>
         ))}
