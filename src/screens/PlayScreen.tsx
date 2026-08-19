@@ -6,7 +6,7 @@ import { transposeKey } from '../lib/transpose';
 import { playReferenceTone, Metronome, playClick } from '../lib/audio';
 import { SongRenderer } from '../components/SongRenderer';
 import { useWakeLock } from '../hooks/useWakeLock';
-import { ChevronLeft, Settings, Play, Pause, Music, Timer, Volume2 } from 'lucide-react';
+import { ChevronLeft, Settings, Play, Pause, Timer, Volume2 } from 'lucide-react';
 import type { Song, SongPrefs, ParseResult } from '../types';
 
 const metronome = new Metronome();
@@ -185,37 +185,16 @@ export const PlayScreen: React.FC = () => {
 
   return (
     <div className="screen play-screen">
-      {/* Header */}
-      <div className="play-header" onClick={handleScrollToTop}>
-        <button className="back-btn" onClick={(e) => { e.stopPropagation(); navigate(-1); }}>
-          <ChevronLeft size={24} strokeWidth={2.5} />
-        </button>
-        <div className="play-title">
-          <h1>{parsed.title}</h1>
-          <span className="play-artist">{parsed.artist}</span>
-        </div>
-        {currentKey && <span className="play-key">{currentKey}</span>}
-        {prefs.capo !== null && prefs.capo > 0 && (
-          <span className="play-capo">kapo {prefs.capo}</span>
-        )}
-        <button className="prep-btn" onClick={(e) => { e.stopPropagation(); setShowPrep(!showPrep); }} aria-label="Nastavení">
-          <Settings size={20} strokeWidth={2.5} />
-        </button>
-      </div>
+      {/* Floating back button */}
+      <button className="back-btn-floating" onClick={() => navigate(-1)}>
+        <ChevronLeft size={22} strokeWidth={2.5} />
+      </button>
 
-      {/* Preparation panel */}
-      {showPrep && (
-        <PrepPanel
-          prefs={prefs}
-          parsed={parsed}
-          onTranspose={handleTranspose}
-          onCapoChange={handleCapoChange}
-          onFontScale={handleFontScale}
-          onSetTempo={handleSetTempo}
-          firstChord={firstChord}
-          onClose={() => setShowPrep(false)}
-        />
-      )}
+      {/* Centered song title pill */}
+      <div className="title-pill" onClick={handleScrollToTop}>
+        <span className="title-pill-name">{parsed.title}</span>
+        {currentKey && <span className="title-pill-key">{currentKey}</span>}
+      </div>
 
       {/* Song content */}
       <div
@@ -258,29 +237,47 @@ export const PlayScreen: React.FC = () => {
       )}
 
       {/* Bottom controls */}
-      <div className="play-controls">
+      <div className="play-controls-bar">
         <button
-          className={`control-btn ${autoScrolling ? 'active' : ''}`}
+          className={`control-circle ${autoScrolling ? 'active' : ''}`}
           onClick={handleToggleScroll}
           title="Autoscroll"
         >
           {autoScrolling ? <Pause size={20} strokeWidth={2.5} /> : <Play size={20} strokeWidth={2.5} />}
         </button>
-        <button
-          className={`control-btn ${prefs.chordsVisible ? 'active' : ''}`}
-          onClick={handleToggleChords}
-          title="Akordy"
-        >
-          <Music size={20} strokeWidth={2.5} />
-        </button>
-        <button
-          className={`control-btn ${metronomeOn ? 'active' : ''}`}
-          onClick={handleToggleMetronome}
-          title="Metronom"
-        >
-          <Timer size={20} strokeWidth={2.5} />
-        </button>
+        <div className="control-pill-right">
+          <button
+            className={`control-btn ${metronomeOn ? 'active' : ''}`}
+            onClick={handleToggleMetronome}
+            title="Metronom"
+          >
+            <Timer size={20} strokeWidth={2.5} />
+          </button>
+          <button
+            className={`control-btn ${showPrep ? 'active' : ''}`}
+            onClick={() => setShowPrep(!showPrep)}
+            title="Nastavení"
+          >
+            <Settings size={20} strokeWidth={2.5} />
+          </button>
+        </div>
       </div>
+
+      {/* Settings dropdown */}
+      {showPrep && (
+        <PrepPanel
+          prefs={prefs}
+          parsed={parsed}
+          onTranspose={handleTranspose}
+          onCapoChange={handleCapoChange}
+          onFontScale={handleFontScale}
+          onSetTempo={handleSetTempo}
+          onToggleChords={handleToggleChords}
+          chordsVisible={prefs.chordsVisible}
+          firstChord={firstChord}
+          onClose={() => setShowPrep(false)}
+        />
+      )}
     </div>
   );
 };
@@ -293,6 +290,8 @@ interface PrepPanelProps {
   onCapoChange: (capo: number | null) => void;
   onFontScale: (scale: number) => void;
   onSetTempo: (tempo: number) => void;
+  onToggleChords: () => void;
+  chordsVisible: boolean;
   firstChord?: string;
   onClose: () => void;
 }
@@ -304,6 +303,8 @@ const PrepPanel: React.FC<PrepPanelProps> = ({
   onCapoChange,
   onFontScale,
   onSetTempo,
+  onToggleChords,
+  chordsVisible,
   firstChord,
   onClose,
 }) => {
@@ -314,7 +315,16 @@ const PrepPanel: React.FC<PrepPanelProps> = ({
   }, [bpm, onSetTempo]);
 
   return (
-    <div className="prep-panel">
+    <div className="prep-panel-dropdown">
+      <div className="prep-section">
+        <label>Akordy</label>
+        <div className="prep-row">
+          <button className={chordsVisible ? 'active' : ''} onClick={onToggleChords}>
+            {chordsVisible ? 'Skrýt' : 'Zobrazit'}
+          </button>
+        </div>
+      </div>
+
       <div className="prep-section">
         <label>Transpozice</label>
         <div className="prep-row">
