@@ -15,7 +15,10 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api/],
         globIgnores: ['**/version.json'],
+        skipWaiting: false,
+        clientsClaim: true,
       },
       manifest: {
         name: 'Zpěvník',
