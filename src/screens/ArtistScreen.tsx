@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getAllSongs } from '../lib/db';
 import { UNKNOWN_ARTIST } from '../lib/artists';
 import { FloatingHeader, useHeaderReveal } from '../components/FloatingHeader';
-import { ChevronLeft } from 'lucide-react';
+import { X } from 'lucide-react';
 import type { Song } from '../types';
 
 /** All songs by one artist, as a card grid. */
@@ -40,8 +40,8 @@ export const ArtistScreen: React.FC = () => {
     <div className="screen artist-screen">
       <FloatingHeader
         title={artist}
-        icon={<ChevronLeft size={24} strokeWidth={2.5} />}
-        actionLabel="Zpět"
+        icon={<X size={22} strokeWidth={2.5} />}
+        actionLabel="Zavřít"
         onAction={() => navigate('/')}
         revealed={revealed}
         onTitleClick={scrollToTop}

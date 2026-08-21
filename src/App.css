@@ -41,6 +41,9 @@
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
 
+  /* Floating controls sit inside the home-indicator inset, not above it */
+  --dock: max(8px, calc(var(--sab) - 22px));
+
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   /* Serif display face for the app name */
   --font-serif: 'Playfair Display', 'Iowan Old Style', Georgia, serif;
@@ -549,7 +552,8 @@ body {
   }
 }
 
-/* Top scrim: solid black at the edge, fading to transparent below the header */
+/* Top scrim: fully opaque behind the status bar so nothing scrolls under the
+   Dynamic Island / notch, then a short fade below the floating header band. */
 .floating-scrim {
   position: fixed;
   top: 0;
@@ -558,7 +562,13 @@ body {
   height: calc(76px + var(--sat));
   z-index: 29;
   pointer-events: none;
-  background: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0) 100%);
+  background: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 var(--sat),
+    rgba(0, 0, 0, 0.96) calc(var(--sat) + 44px),
+    rgba(0, 0, 0, 0) 100%
+  );
 }
 
 /* Centered song title — plain text, no pill */
@@ -607,7 +617,10 @@ body {
 .play-content {
   flex: 1;
   overflow-y: auto;
-  padding: calc(80px + var(--sat)) max(20px, var(--sar)) 120px max(20px, var(--sal));
+  /* Bottom clearance is exactly the floating control bar's height — the song
+     ends as close to the edge as it can without hiding behind the buttons. */
+  padding: calc(80px + var(--sat)) max(20px, var(--sar)) calc(56px + var(--dock))
+    max(20px, var(--sal));
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
 }
@@ -821,7 +834,7 @@ body {
 /* Play controls — floating bar: circle left, pill right */
 .play-controls-bar {
   position: fixed;
-  bottom: calc(12px + var(--sab));
+  bottom: var(--dock);
   left: max(12px, var(--sal));
   right: max(12px, var(--sar));
   display: flex;
@@ -898,7 +911,7 @@ body {
 /* Preparation panel — dropdown from bottom right */
 .prep-panel-dropdown {
   position: fixed;
-  bottom: calc(80px + var(--sab));
+  bottom: calc(68px + var(--dock));
   right: max(12px, var(--sar));
   background: var(--bg-elevated);
   border: 1px solid var(--border);
