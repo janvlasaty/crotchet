@@ -23,3 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 node_modules/
+
+# Local-only test fixtures and import tooling — not for commit
+src/songs/generated/
+scripts
+imported-songs/
+catalog.tsv
+songs.tsv
+ids.txt

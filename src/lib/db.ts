@@ -6,7 +6,7 @@ import type { Song, SongPrefs, PlayRecord, Setlist, SongIndex } from '../types';
 import { parseChordPro, extractPlainText, extractChords, normalizeForSearch } from './parser';
 
 const DB_NAME = 'zpevnik';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 interface ZpevnikDB {
   songs: {
@@ -27,6 +27,10 @@ interface ZpevnikDB {
     key: string;
     value: Setlist;
   };
+  meta: {
+    key: string;
+    value: { key: string; value: string };
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<ZpevnikDB>> | null = null;
@@ -34,21 +38,29 @@ let dbPromise: Promise<IDBPDatabase<ZpevnikDB>> | null = null;
 export function getDB(): Promise<IDBPDatabase<ZpevnikDB>> {
   if (!dbPromise) {
     dbPromise = openDB<ZpevnikDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        // Songs store
-        const songStore = db.createObjectStore('songs', { keyPath: 'id' });
-        songStore.createIndex('by-title', 'index.title');
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          // Songs store
+          const songStore = db.createObjectStore('songs', { keyPath: 'id' });
+          songStore.createIndex('by-title', 'index.title');
 
-        // Per-song prefs
-        db.createObjectStore('prefs', { keyPath: 'songId' });
+          // Per-song prefs
+          db.createObjectStore('prefs', { keyPath: 'songId' });
 
-        // Play history
-        const historyStore = db.createObjectStore('history', { autoIncrement: true });
-        historyStore.createIndex('by-song', 'songId');
-        historyStore.createIndex('by-time', 'playedAt');
+          // Play history
+          const historyStore = db.createObjectStore('history', { autoIncrement: true });
+          historyStore.createIndex('by-song', 'songId');
+          historyStore.createIndex('by-time', 'playedAt');
 
-        // Setlists
-        db.createObjectStore('setlists', { keyPath: 'id' });
+          // Setlists
+          db.createObjectStore('setlists', { keyPath: 'id' });
+        }
+
+        if (oldVersion < 2) {
+          // Bookkeeping for the seed stamp, so songs are parsed once rather
+          // than on every launch.
+          db.createObjectStore('meta', { keyPath: 'key' });
+        }
       },
     });
   }
@@ -188,13 +200,43 @@ export async function deleteSetlist(id: string): Promise<void> {
   await db.delete('setlists', id);
 }
 
-/** Seed songs from static .cho files — always update to latest content */
+/**
+ * Fingerprint of the static song set. A single pass over the sources — cheap
+ * next to parsing every song, which is what it lets us skip.
+ */
+function songSetStamp(songs: Array<{ id: string; chordpro: string }>): string {
+  let h = 5381;
+  for (const { id, chordpro } of songs) {
+    for (let i = 0; i < id.length; i++) h = ((h * 33) ^ id.charCodeAt(i)) | 0;
+    for (let i = 0; i < chordpro.length; i++) h = ((h * 33) ^ chordpro.charCodeAt(i)) | 0;
+  }
+  return `${songs.length}:${(h >>> 0).toString(36)}`;
+}
+
+/**
+ * Seed songs from static .cho files. Parses and writes only when the song set
+ * has actually changed — otherwise this is one indexed read, so startup no
+ * longer scales with catalog size.
+ */
 export async function seedSongsIfNeeded(songs: Array<{ id: string; chordpro: string }>): Promise<void> {
   const db = await getDB();
+  const stamp = songSetStamp(songs);
+
+  if ((await db.get('meta', 'seed'))?.value === stamp) return;
+
   const tx = db.transaction('songs', 'readwrite');
   for (const { id, chordpro } of songs) {
     const index = buildSongIndex(id, chordpro);
     await tx.store.put({ id, chordpro, index });
   }
+  // Drop rows that are no longer in the song set. Without this, renaming an id
+  // leaves the old row behind forever and it keeps serving stale content on
+  // /play/:id. The store is seed-only, so nothing user-authored is at risk.
+  const live = new Set(songs.map(s => s.id));
+  for (const id of await tx.store.getAllKeys()) {
+    if (!live.has(String(id))) await tx.store.delete(id);
+  }
   await tx.done;
+
+  await db.put('meta', { key: 'seed', value: stamp });
 }

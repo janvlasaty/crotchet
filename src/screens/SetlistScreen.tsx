@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getAllSetlists, saveSetlist, deleteSetlist, getAllSongs } from '../lib/db';
-import { Home, ListMusic, ChevronLeft, Plus, Trash2, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { ChevronLeft, Plus, Trash2, ChevronUp, ChevronDown, X } from 'lucide-react';
 import type { Setlist, Song } from '../types';
 
 export const SetlistScreen: React.FC = () => {
@@ -70,17 +70,6 @@ export const SetlistScreen: React.FC = () => {
           <div className="empty-state">Žádné setlisty</div>
         )}
       </div>
-
-      <nav className="bottom-nav">
-        <button className="nav-btn" onClick={() => navigate('/')} aria-label="Domů">
-          <Home size={22} strokeWidth={2.5} />
-          <span className="nav-label">Domů</span>
-        </button>
-        <button className="nav-btn active" aria-label="Setlisty">
-          <ListMusic size={22} strokeWidth={2.5} />
-          <span className="nav-label">Setlisty</span>
-        </button>
-      </nav>
     </div>
   );
 };

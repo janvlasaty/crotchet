@@ -5,11 +5,24 @@ import { parseChordPro, extractChords } from '../lib/parser';
 import { transposeKey } from '../lib/transpose';
 import { playReferenceTone, Metronome, playClick } from '../lib/audio';
 import { SongRenderer } from '../components/SongRenderer';
+import { FloatingHeader, useHeaderReveal } from '../components/FloatingHeader';
 import { useWakeLock } from '../hooks/useWakeLock';
-import { ChevronLeft, Settings, Play, Pause, Timer, Volume2 } from 'lucide-react';
+import { X, Settings, Play, Pause, Timer, Volume2, ChevronRight } from 'lucide-react';
 import type { Song, SongPrefs, ParseResult } from '../types';
 
 const metronome = new Metronome();
+
+/** Key implied by a chord: its root, minor only for plain m/min qualities. */
+function keyFromChord(chord: string | undefined): string {
+  if (!chord) return '';
+  const match = /^([A-H][#b]?)(.*)$/.exec(chord.split('/')[0]);
+  if (!match) return '';
+  const [, rawRoot, rest] = match;
+  // Czech H is B, as elsewhere in the app — keeps transposeKey able to parse it
+  const root = rawRoot[0] === 'H' ? `B${rawRoot.slice(1)}` : rawRoot;
+  const minor = /^(m|min)(?!aj)/.test(rest);
+  return minor ? `${root}m` : root;
+}
 
 export const PlayScreen: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,15 +33,22 @@ export const PlayScreen: React.FC = () => {
   const [metronomeOn, setMetronomeOn] = useState(false);
   const [autoScrolling, setAutoScrolling] = useState(false);
   const [songEnded, setSongEnded] = useState(false);
-  const [recommendations, setRecommendations] = useState<Song[]>([]);
+  const [library, setLibrary] = useState<Song[]>([]);
+  const [playedIds, setPlayedIds] = useState<Set<string>>(new Set());
   const [scrollProgress, setScrollProgress] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
+  const { revealed, setRevealed, heroRef, scrimRef, updateReveal } = useHeaderReveal();
   const scrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useWakeLock();
 
   useEffect(() => {
     if (!id) return;
+    // Switching songs (e.g. from the recommendations) starts fresh at the top
+    setSongEnded(false);
+    setScrollProgress(0);
+    setRevealed(false);
+    contentRef.current?.scrollTo({ top: 0 });
     Promise.all([getSong(id), getSongPrefs(id)]).then(([s, p]) => {
       if (s) {
         setSong(s);
@@ -36,13 +56,10 @@ export const PlayScreen: React.FC = () => {
         recordPlay(id);
       }
     });
-    // Load recommendations (random songs, excluding recently played)
+    // Pool for the end-of-song recommendations
     Promise.all([getAllSongs(), getRecentPlays(10)]).then(([allSongs, recentPlays]) => {
-      const recentIds = new Set(recentPlays.map(p => p.songId));
-      recentIds.add(id!);
-      const others = allSongs.filter(s => !recentIds.has(s.id));
-      const shuffled = others.sort(() => Math.random() - 0.5);
-      setRecommendations(shuffled.slice(0, 3));
+      setLibrary(allSongs);
+      setPlayedIds(new Set([id!, ...recentPlays.map(p => p.songId)]));
     });
   }, [id]);
 
@@ -53,8 +70,28 @@ export const PlayScreen: React.FC = () => {
 
   const currentKey = useMemo(() => {
     if (!parsed || !prefs) return '';
-    return parsed.key ? transposeKey(parsed.key, prefs.transpose) : '';
+    // No {key} directive: the first chord of the song stands in for it
+    const key = parsed.key || keyFromChord(extractChords(parsed)[0]);
+    return key ? transposeKey(key, prefs.transpose) : '';
   }, [parsed, prefs]);
+
+  const artist = song?.index.artist?.trim() || '';
+
+  /** Other songs by the same artist — never the open one, never recently played. */
+  const artistRecs = useMemo(() => {
+    if (!artist) return [];
+    return library
+      .filter(s => (s.index.artist?.trim() || '') === artist && !playedIds.has(s.id))
+      .sort((a, b) => a.index.title.localeCompare(b.index.title, 'cs'));
+  }, [library, playedIds, artist]);
+
+  /** Fresh picks from other artists, in random order. */
+  const otherRecs = useMemo(() => {
+    return library
+      .filter(s => !playedIds.has(s.id) && (s.index.artist?.trim() || '') !== artist)
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 10);
+  }, [library, playedIds, artist]);
 
   const handleToggleChords = useCallback(() => {
     if (!prefs) return;
@@ -117,6 +154,20 @@ export const PlayScreen: React.FC = () => {
     setAutoScrolling(!autoScrolling);
   }, [autoScrolling, prefs, parsed, stopScroll]);
 
+  // Close leaves the song: back to where we came from, or home on a deep link.
+  // History idx stays put across replace-navigations between recommendations.
+  const handleClose = useCallback(() => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate('/', { replace: true });
+  }, [navigate]);
+
+  // replace: chaining recommendations must not stack up history
+  const playRecommendation = useCallback(
+    (songId: string) => navigate(`/play/${songId}`, { replace: true }),
+    [navigate]
+  );
+
   const handleScrollToTop = useCallback(() => {
     contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     setSongEnded(false);
@@ -141,10 +192,11 @@ export const PlayScreen: React.FC = () => {
     if (maxScroll > 0) {
       setScrollProgress(el.scrollTop / maxScroll);
     }
+    updateReveal(el);
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 30) {
       setSongEnded(true);
     }
-  }, []);
+  }, [updateReveal]);
 
   // Prep panel handlers
   const handleTranspose = useCallback((delta: number) => {
@@ -182,19 +234,20 @@ export const PlayScreen: React.FC = () => {
 
   const chords = extractChords(parsed);
   const firstChord = chords[0];
+  const heroTempo = prefs.tempo || parsed.tempo;
 
   return (
     <div className="screen play-screen">
-      {/* Floating back button */}
-      <button className="back-btn-floating" onClick={() => navigate(-1)}>
-        <ChevronLeft size={22} strokeWidth={2.5} />
-      </button>
-
-      {/* Centered song title pill */}
-      <div className="title-pill" onClick={handleScrollToTop}>
-        <span className="title-pill-name">{parsed.title}</span>
-        {currentKey && <span className="title-pill-key">{currentKey}</span>}
-      </div>
+      <FloatingHeader
+        title={parsed.title}
+        accessory={currentKey}
+        icon={<X size={22} strokeWidth={2.5} />}
+        actionLabel="Zavřít"
+        onAction={handleClose}
+        revealed={revealed}
+        onTitleClick={handleScrollToTop}
+        scrimRef={scrimRef}
+      />
 
       {/* Song content */}
       <div
@@ -208,6 +261,23 @@ export const PlayScreen: React.FC = () => {
           }
         }}
       >
+        <header className="hero" ref={heroRef}>
+          <h1 className="hero-title">{parsed.title}</h1>
+          <div className="hero-meta">
+            {artist && (
+              <button
+                className="hero-meta-lead hero-meta-link"
+                onClick={() => navigate(`/artist/${encodeURIComponent(artist)}`)}
+              >
+                {artist}
+              </button>
+            )}
+            {currentKey && <span className="hero-meta-accent">{currentKey}</span>}
+            {!!prefs.capo && <span>Kapo {prefs.capo}</span>}
+            {heroTempo && <span>{heroTempo} BPM</span>}
+          </div>
+        </header>
+
         <SongRenderer
           parsed={parsed}
           transpose={prefs.transpose}
@@ -215,15 +285,29 @@ export const PlayScreen: React.FC = () => {
           chordsVisible={prefs.chordsVisible}
           fontScale={prefs.fontScale}
         />
-        {songEnded && recommendations.length > 0 && (
+        {songEnded && (artistRecs.length > 0 || otherRecs.length > 0) && (
           <div className="song-recommendations">
-            <h3>Další písně</h3>
-            {recommendations.map(r => (
-              <div key={r.id} className="recommendation-item" onClick={() => navigate(`/play/${r.id}`)}>
-                <span className="rec-title">{r.index.title}</span>
-                <span className="rec-artist">{r.index.artist}</span>
-              </div>
-            ))}
+            {artistRecs.length > 0 && (
+              <section className="rec-section">
+                <div className="rec-head">
+                  <h3>Další od {artist}</h3>
+                  <button
+                    className="rec-head-link"
+                    onClick={() => navigate(`/artist/${encodeURIComponent(artist)}`)}
+                  >
+                    Vše
+                    <ChevronRight size={14} strokeWidth={2.5} />
+                  </button>
+                </div>
+                <RecommendationRail songs={artistRecs} onPick={playRecommendation} />
+              </section>
+            )}
+            {otherRecs.length > 0 && (
+              <section className="rec-section">
+                <h3>Další písně</h3>
+                <RecommendationRail songs={otherRecs} onPick={playRecommendation} showArtist />
+              </section>
+            )}
           </div>
         )}
       </div>
@@ -281,6 +365,29 @@ export const PlayScreen: React.FC = () => {
     </div>
   );
 };
+
+interface RecommendationRailProps {
+  songs: Song[];
+  onPick: (songId: string) => void;
+  /** Second line on the card — the artist, where the section isn't one artist. */
+  showArtist?: boolean;
+}
+
+/** Cards in two rows, scrolling sideways. */
+const RecommendationRail: React.FC<RecommendationRailProps> = ({ songs, onPick, showArtist }) => (
+  <div className="rec-rail">
+    {songs.map(s => (
+      <div key={s.id} className="song-card" onClick={() => onPick(s.id)}>
+        <div className="song-card-title">{s.index.title}</div>
+        {showArtist ? (
+          <div className="song-card-artist">{s.index.artist}</div>
+        ) : (
+          s.index.originalKey && <div className="song-card-artist">{s.index.originalKey}</div>
+        )}
+      </div>
+    ))}
+  </div>
+);
 
 // Preparation panel
 interface PrepPanelProps {

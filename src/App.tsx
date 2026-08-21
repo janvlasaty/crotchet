@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { HomeScreen } from './screens/HomeScreen';
 import { PlayScreen } from './screens/PlayScreen';
 import { SetlistScreen, SetlistDetailScreen } from './screens/SetlistScreen';
+import { ArtistScreen } from './screens/ArtistScreen';
 import { seedSongsIfNeeded } from './lib/db';
 import { checkForUpdate, shouldCheckForUpdate, applyUpdate } from './lib/version';
 import { songFiles } from './songs';
@@ -58,6 +59,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomeScreen />} />
         <Route path="/play/:id" element={<PlayScreen />} />
+        <Route path="/artist/:name" element={<ArtistScreen />} />
         <Route path="/setlists" element={<SetlistScreen />} />
         <Route path="/setlist/:id" element={<SetlistDetailScreen />} />
       </Routes>

@@ -41,3 +41,26 @@ export const songFiles = [
   { id: 'uz-ty-pilky-dorezaly', content: uzTyPilkyDorezaly },
   { id: 'ja-jsem-z-kutne-hory', content: jaJsemZKutneHory },
 ];
+
+// Local-only synthetic fixtures from scripts/gen-songs.mjs. The directory is
+// gitignored, so this glob resolves to nothing in a clean checkout.
+const generated = import.meta.glob<{ songContent: string }>('./generated/*.cho.ts', { eager: true });
+
+for (const [path, mod] of Object.entries(generated)) {
+  const id = path.replace('./generated/', '').replace('.cho.ts', '');
+  songFiles.push({ id, content: mod.songContent });
+}
+
+// Local-only imports from scripts/import-song.mjs. Also gitignored, so this
+// resolves to nothing in a clean checkout.
+const imported = import.meta.glob<{ songContent: string }>('../../imported-songs/*.cho.ts', {
+  eager: true,
+});
+
+for (const [path, mod] of Object.entries(imported)) {
+  const slug = path.replace('../../imported-songs/', '').replace('.cho.ts', '');
+  // Namespaced so a local import can never shadow a curated song: ids are the
+  // IndexedDB primary key and seeding uses put(), so a clash would silently
+  // overwrite. Kept URL-safe (no slash) — ids go into /play/:id.
+  songFiles.push({ id: `imported--${slug}`, content: mod.songContent });
+}

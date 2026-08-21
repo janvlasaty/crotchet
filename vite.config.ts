@@ -4,6 +4,11 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: process.env.CI ? '/crotchet/' : '/',
+  server: {
+    // Listen on the LAN so phones on the same Wi-Fi can open the dev server.
+    host: true,
+    port: 5173,
+  },
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? 'dev'),
   },
@@ -13,6 +18,10 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['icons/*.png'],
       workbox: {
+        // The song bundle grows past Workbox's 2 MiB default, at which point the
+        // main chunk is dropped from the precache manifest with only a warning
+        // and the app stops working offline.
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api/],
