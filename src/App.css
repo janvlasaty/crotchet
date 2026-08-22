@@ -33,6 +33,7 @@
   --text-chord: #ff9800;
   --accent: #4fc3f7;
   --accent-dim: rgba(79, 195, 247, 0.15);
+  --danger: #ff6b6b;
   --border: #333;
 
   /* Safe-area inset aliases */
@@ -83,6 +84,7 @@ body {
 .home-header,
 .screen-header,
 .control-btn,
+.scroll-control,
 .control-circle {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -134,6 +136,10 @@ body {
 
 /* Home Screen */
 .home-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: calc(16px + var(--sat)) max(20px, var(--sar)) 8px max(20px, var(--sal));
 }
 
@@ -200,57 +206,12 @@ body {
   font-size: 14px;
 }
 
-.setlist-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  min-height: 44px;
-}
-
-.setlist-row:active {
-  background: var(--accent-dim);
-}
-
 .row-chevron {
   color: var(--text-muted);
   flex-shrink: 0;
 }
 
-.inline-create {
-  display: flex;
-  gap: 8px;
-  padding: 10px 0;
-}
 
-.inline-create input {
-  flex: 1;
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-surface);
-  color: var(--text);
-  font-size: 16px;
-  outline: none;
-}
-
-.inline-create input:focus {
-  border-color: var(--accent);
-}
-
-.inline-create button {
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: none;
-  background: var(--accent-dim);
-  color: var(--accent);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
 
 /* Song grid — small cards, min two columns */
 .song-grid {
@@ -273,11 +234,38 @@ body {
   transition: background 0.15s, border-color 0.15s;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  position: relative;
 }
 
+/* Already collected — accent outline plus a tick in the corner */
+.song-card.picked {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.card-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #06202b;
+}
+
+/*
+ * Held down, not merely touched: the delay outlives a scroll gesture, which
+ * drops :active as soon as the finger moves, so panning no longer lights up
+ * whatever card it started on.
+ */
 .song-card:active {
   background: var(--accent-dim);
   border-color: var(--accent);
+  transition-delay: 120ms;
 }
 
 .song-card-title {
@@ -299,6 +287,277 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Placeholder card that adds something — lighter ground, accent label */
+.card-add {
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--bg-elevated);
+  border: 1px dashed rgba(79, 195, 247, 0.4);
+  text-align: center;
+}
+
+.card-add:active {
+  background: var(--accent-dim);
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+/* Modal — a name to type, over a dimmed page */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: modal-scrim-in 200ms ease both;
+}
+
+@keyframes modal-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-card {
+  position: fixed;
+  z-index: 51;
+  top: 50%;
+  left: max(20px, var(--sal));
+  right: max(20px, var(--sar));
+  transform: translateY(-60%);
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+  animation: modal-card-in 220ms cubic-bezier(0.32, 1.2, 0.6, 1) both;
+}
+
+@keyframes modal-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(-60%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-60%) scale(1);
+  }
+}
+
+.modal-card h3 {
+  margin-bottom: 14px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.modal-card input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 16px;
+  outline: none;
+}
+
+.modal-card input:focus {
+  border-color: var(--accent);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.modal-btn {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modal-btn.primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: #06202b;
+}
+
+.modal-btn:active {
+  opacity: 0.7;
+}
+
+.modal-btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Cards revealing one after another, as at the end of a song */
+.reveal-grid .song-card {
+  animation: recs-in 320ms cubic-bezier(0.32, 1.2, 0.6, 1) both;
+}
+
+/* On the way out the grid leaves as one, then the next letter cascades in */
+.reveal-grid.leaving {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.reveal-grid.leaving .song-card {
+  animation: none;
+}
+
+/* Setlist detail — rows, so the order can be dragged */
+.setlist-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.setlist-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* Section heading that navigates — inherits the h3 look it sits in */
+.rec-head-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rec-head-title:active {
+  color: var(--accent);
+}
+
+/* Up-next rows reveal in the same cascade as the recommendation cards */
+.setlist-queue .setlist-row {
+  cursor: pointer;
+  animation: recs-in 320ms cubic-bezier(0.32, 1.2, 0.6, 1) both;
+}
+
+.setlist-queue .setlist-row:active {
+  background: var(--accent-dim);
+  transition: background 0.15s 120ms;
+}
+
+/* Reveals the rest of a long setlist */
+.queue-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 44px;
+  margin-top: 4px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  animation: recs-in 320ms cubic-bezier(0.32, 1.2, 0.6, 1) both;
+}
+
+.queue-more:active {
+  opacity: 0.6;
+}
+
+/* The row under the finger lifts off the page */
+.setlist-row.dragging {
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  border-bottom-color: transparent;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+.setlist-order {
+  flex: 0 0 22px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.setlist-row-main {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.setlist-row-main .song-title,
+.setlist-row-main .song-artist {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.setlist-row-btn {
+  flex: 0 0 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.setlist-row-btn:active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* The handle owns vertical gestures, so dragging never scrolls the page */
+.drag-handle {
+  touch-action: none;
+  cursor: grab;
+}
+
+.setlist-row.dragging .drag-handle {
+  color: var(--accent);
+  cursor: grabbing;
+}
+
 /* Song list item */
 .song-list-item {
   padding: 12px 0;
@@ -312,6 +571,7 @@ body {
 
 .song-list-item:active {
   background: var(--accent-dim);
+  transition: background 0.15s 120ms;
 }
 
 .song-title {
@@ -348,19 +608,55 @@ body {
   display: flex;
   align-items: center;
   overflow: hidden;
-  z-index: 40;
+  z-index: 42;
   transition:
     width 340ms cubic-bezier(0.32, 1.28, 0.6, 1),
+    transform 260ms cubic-bezier(0.32, 1.28, 0.6, 1),
+    opacity 200ms ease,
     background 220ms ease,
+    box-shadow 220ms ease,
     border-color 220ms ease;
+}
+
+/* Play screen: sit exactly where the play button was, so one replaces the other */
+.search-fab.in-control-bar {
+  bottom: var(--dock);
+  left: max(12px, var(--sal));
+}
+
+.search-fab.in-control-bar.open {
+  width: calc(100vw - max(12px, var(--sal)) - max(12px, var(--sar)));
+}
+
+/* Scaled out while the other control owns the corner */
+.search-fab.tucked,
+.scroll-control.tucked {
+  transform: scale(0.3);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .search-fab.open {
   width: calc(100vw - max(16px, var(--sal)) - max(16px, var(--sar)));
   background: rgba(28, 28, 30, 0.95);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Lens with a plus tucked into its corner */
+.icon-stack {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-badge {
+  position: absolute;
+  top: -3px;
+  right: -5px;
 }
 
 /* The glyph doubles as the open trigger, then becomes the field's leading icon */
@@ -434,32 +730,98 @@ body {
 }
 
 /* Alphabet filter strip */
-.alpha-strip {
+/*
+ * Alphabet picker: one row that scrolls sideways and snaps letters to the
+ * centre line, where the letter is magnified and becomes the active filter.
+ * The half-width padding is what lets the first and last letter reach centre.
+ */
+.alpha-picker {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 10px;
+  align-items: center;
+  margin: 0 calc(-1 * max(20px, var(--sal))) 12px calc(-1 * max(20px, var(--sar)));
+  padding: 4px 0 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  /* proximity, not mandatory: mandatory snapping cuts a touch fling short at
+     the next letter, so a long swipe only ever travelled a few letters */
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.alpha-picker::-webkit-scrollbar {
+  display: none;
+}
+
+/* Letters dissolve into the screen edges instead of being cut off */
+.alpha-picker {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 14%,
+    #000 86%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to right, transparent 0, #000 14%, #000 86%, transparent 100%);
 }
 
 .alpha-key {
-  min-width: 30px;
-  min-height: 30px;
-  padding: 0 6px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-surface);
+  position: relative;
+  flex: 0 0 auto;
+  scroll-snap-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Keys are 52px wide at minimum — keep .alpha-picker's edge padding at half
+     of that, or the outermost letters cannot be centred. */
+  min-width: 24px;
+  /* The padding is the visual spacing and the tap target both */
+  padding: 8px 14px;
+  border: none;
+  background: none;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
+  line-height: 1;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  transition: color 180ms ease;
+}
+
+/*
+ * Half-strip spacers at both ends, so the first and last letter can sit on the
+ * centre line. Percentages here resolve against the scroller's own width —
+ * padding percentages would resolve against the parent, which is narrower.
+ */
+.alpha-pad {
+  flex: 0 0 calc(50% - 26px);
+}
+
+/* Separator sits on the seam between two keys, decorative only */
+.alpha-key + .alpha-key::before {
+  content: '·';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--border);
+  pointer-events: none;
+}
+
+/* The glyph carries the lens, so the dots never grow with it */
+.alpha-glyph {
+  display: block;
+  transition: transform 180ms cubic-bezier(0.32, 1.3, 0.6, 1);
 }
 
 .alpha-key.active {
-  background: var(--accent-dim);
-  border-color: var(--accent);
   color: var(--accent);
+  font-weight: 700;
+}
+
+.alpha-key.active .alpha-glyph {
+  transform: scale(1.85);
 }
 
 /* Artist detail screen */
@@ -467,7 +829,9 @@ body {
   position: relative;
 }
 
-.artist-scroll {
+/* Shared scroller for the screens that use a floating header over a hero */
+.artist-scroll,
+.page-scroll {
   flex: 1;
   overflow-y: auto;
   padding: calc(80px + var(--sat)) max(20px, var(--sar)) calc(24px + var(--sab)) max(20px, var(--sal));
@@ -475,35 +839,54 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Clears the floating search button, so the last row is never hidden by it */
+.page-scroll {
+  padding-bottom: calc(96px + var(--sab));
+}
+
 /* Search — dropdown above the field, page stays visible */
+/* Scrim behind the open search: dims and blurs the page, and catches taps to close */
 .search-dismiss {
   position: fixed;
   inset: 0;
   z-index: 39;
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(0px);
+  backdrop-filter: blur(0px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 240ms ease,
+    backdrop-filter 240ms ease,
+    -webkit-backdrop-filter 240ms ease;
 }
 
-/* Results float directly above the pill — no footer chrome */
-.search-dropdown {
+.search-dismiss.visible {
+  opacity: 1;
+  pointer-events: auto;
+  -webkit-backdrop-filter: blur(12px) saturate(0.9);
+  backdrop-filter: blur(12px) saturate(0.9);
+}
+
+/* Results sit straight on the blurred backdrop — the cards are the only chrome */
+.search-results {
   position: fixed;
-  bottom: calc(80px + var(--sab));
+  top: calc(12px + var(--sat));
+  bottom: 0;
   left: max(16px, var(--sal));
   right: max(16px, var(--sar));
   z-index: 40;
-  max-height: min(50vh, 380px);
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 4px 14px;
-  border-radius: 16px;
-  background: rgba(28, 28, 30, 0.95);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
-  animation: search-dropdown-in 220ms cubic-bezier(0.32, 1.2, 0.6, 1);
+  /* Content scrolls under the pill; the fade below hides the hand-off */
+  padding-bottom: calc(88px + var(--sab));
+  animation: search-results-in 220ms cubic-bezier(0.32, 1.2, 0.6, 1);
 }
 
-@keyframes search-dropdown-in {
+@keyframes search-results-in {
   from {
     opacity: 0;
     transform: translateY(12px) scale(0.98);
@@ -514,8 +897,61 @@ body {
   }
 }
 
-.search-dropdown-list .song-list-item:last-child {
-  border-bottom: none;
+/* Section headings, kept when both artists and songs match */
+.search-group-label {
+  padding: 14px 2px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.search-group-label:first-child {
+  padding-top: 2px;
+}
+
+/* Result cards are a touch denser than the home grid, and let the blur through */
+.search-results .song-grid {
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.search-results .song-card {
+  min-height: 68px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* Artist cards read as a category, not a song */
+.search-artist-card {
+  border-color: rgba(79, 195, 247, 0.45);
+}
+
+.search-results .song-card:active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+/* Vertical fade behind the input: results dissolve into black at the bottom */
+.search-fade {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(120px + var(--sab));
+  z-index: 41;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.75) 45%, #000 100%);
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.search-fade.visible {
+  opacity: 1;
 }
 
 /* Play Screen */
@@ -598,6 +1034,15 @@ body {
   transform: translate(-50%, 0);
 }
 
+/* Title stacked over its small subtitle, so both fit the 56px header */
+.floating-title-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  line-height: 1.2;
+}
+
 .floating-title-name {
   font-size: 15px;
   font-weight: 600;
@@ -605,6 +1050,17 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.floating-title-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .floating-title-accessory {
@@ -644,17 +1100,31 @@ body {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 10px;
+  gap: 6px 14px;
   margin-top: 8px;
   font-size: 13px;
   color: var(--text-muted);
 }
 
-/* Separator dots between the meta items */
-.hero-meta > * + *::before {
+/*
+ * Dots separate the chips only. The artist is set off by the row gap instead —
+ * a dot there would lead the second line once the group wraps.
+ */
+.meta-chips > * + *::before {
   content: '·';
   margin-right: 10px;
   color: var(--text-muted);
+}
+
+/*
+ * The chips are one indivisible unit: when the artist name leaves too little
+ * room, the whole group drops to the next line rather than splitting mid-way.
+ */
+.meta-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 10px;
 }
 
 .hero-meta-lead {
@@ -689,6 +1159,326 @@ body {
   color: var(--accent);
 }
 
+/* Tappable meta chips: key, capo, tempo, reference tone */
+.meta-chip {
+  padding: 2px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  letter-spacing: 0.04em;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s;
+}
+
+/* Note glyph needs breathing room from the separator dot, text does not */
+.meta-chip-icon {
+  gap: 6px;
+}
+
+/* Destructive chip */
+.meta-chip.danger {
+  color: var(--danger);
+}
+
+/* Metronome running: the chip stays lit even with every panel closed */
+.meta-chip.ticking {
+  color: var(--accent);
+}
+
+/* The panel's arrow already points at the open chip; just brighten it */
+.meta-chip.open {
+  color: var(--text);
+}
+
+.meta-chip:active {
+  color: var(--text);
+}
+
+.meta-chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Capo with nothing set reads as struck out rather than missing */
+.meta-off {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  opacity: 0.7;
+}
+
+.meta-dismiss {
+  position: fixed;
+  inset: 0;
+  /* Over the header scrim (29) and its buttons (30) */
+  z-index: 31;
+}
+
+/* The row is the anchor; the panel floats in the empty space above it */
+.hero-meta-wrap {
+  position: relative;
+}
+
+.meta-popover {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  /* left and --arrow are measured on open; the height is deliberately fixed so
+     switching chips or changing a value never resizes the panel */
+  width: 176px;
+  z-index: 32;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 20px;
+  background: rgba(38, 38, 43, 0.96);
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  backdrop-filter: blur(24px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 16px 44px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  animation: meta-popover-in 200ms cubic-bezier(0.32, 1.25, 0.6, 1);
+  transform-origin: bottom center;
+}
+
+/* Kill the meta row's separator dot, which would otherwise land in here */
+.meta-popover::before {
+  content: none;
+}
+
+/* Arrow aimed at the chip that opened the panel */
+.meta-popover::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: var(--arrow, 50%);
+  width: 11px;
+  height: 11px;
+  margin-left: -6px;
+  background: rgba(38, 38, 43, 0.96);
+  border-right: 1px solid rgba(255, 255, 255, 0.16);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  border-bottom-right-radius: 3px;
+  transform: rotate(45deg);
+}
+
+/* Too little headroom above the row: hang below it, arrow flipped up */
+.meta-popover.drop {
+  bottom: auto;
+  top: calc(100% + 12px);
+  transform-origin: top center;
+}
+
+.meta-popover.drop::after {
+  bottom: auto;
+  top: -6px;
+  border-right: none;
+  border-bottom: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  border-bottom-right-radius: 0;
+  border-top-left-radius: 3px;
+}
+
+@keyframes meta-popover-drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.meta-popover.drop {
+  animation-name: meta-popover-drop-in;
+}
+
+@keyframes meta-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * Fixed row heights: the readout flexes, everything else is rigid, so a value
+ * changing length never moves a button.
+ */
+.meta-btn {
+  flex: 0 0 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.meta-btn:active,
+.meta-btn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.meta-btn:disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* Value flanked by steppers, on one fixed row */
+.meta-step-row {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  gap: 6px;
+  min-height: 42px;
+}
+
+.meta-step-row .meta-btn {
+  flex: 0 0 40px;
+  height: auto;
+}
+
+/* One row of buttons inside the column */
+.meta-btn-row {
+  display: flex;
+  flex: 0 0 42px;
+  gap: 6px;
+}
+
+.meta-btn-row .meta-btn {
+  flex: 1;
+  height: 100%;
+}
+
+.meta-btn-row .meta-btn.narrow {
+  flex: 0 0 46px;
+}
+
+/* Centred value with its unit underneath, in the space between the steppers */
+.meta-readout {
+  flex: 1;
+  min-height: 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.meta-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.meta-value.accent {
+  color: var(--accent);
+}
+
+/* The sub line doubles as the reset control */
+.meta-sub {
+  padding: 2px 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.meta-sub:active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.meta-sub:disabled,
+.meta-sub.as-text {
+  cursor: default;
+  background: none;
+  color: var(--text-muted);
+}
+
+/* Visual metronome: one dot swinging along a line, a beat per swing */
+.metronome-track {
+  position: relative;
+  flex: 0 0 24px;
+  margin: 0 4px;
+}
+
+.metronome-track::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.metronome-dot {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(79, 195, 247, 0.7);
+  /* One crossing per beat, easing gently through the middle and snapping
+     through the turnaround at each end. */
+  animation-name: metronome-x;
+  animation-duration: var(--beat, 600ms);
+  animation-timing-function: cubic-bezier(0.25, 0.6, 0.75, 0.4);
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+/* left, not transform: percentages resolve against the track, whatever its width */
+@keyframes metronome-x {
+  from {
+    left: 0;
+  }
+  to {
+    left: calc(100% - 10px);
+  }
+}
+
 /* Song rendering */
 .song-content {
   line-height: 1.4;
@@ -703,6 +1493,12 @@ body {
 
 .section-chorus {
   border-left: 3px solid var(--accent);
+  padding-left: 12px;
+}
+
+/* A chorus written out from a shortened recall — same block, softer rule. */
+.section-recalled {
+  border-left: 3px dashed var(--accent);
   padding-left: 12px;
 }
 
@@ -844,28 +1640,124 @@ body {
   pointer-events: none;
 }
 
-.control-circle {
+/*
+ * Primary action on the play screen: an accent circle that expands into a dark
+ * pill on play, revealing the turtle/rabbit pace controls — same morph as the
+ * search FAB on the home screen.
+ */
+.scroll-control {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
   width: 56px;
   height: 56px;
-  border-radius: 50%;
-  background: rgba(28, 28, 30, 0.85);
+  border-radius: 28px;
+  overflow: hidden;
+  background: rgba(28, 28, 30, 0.9);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-  color: var(--text-muted);
+  pointer-events: auto;
+  transition:
+    width 340ms cubic-bezier(0.32, 1.28, 0.6, 1),
+    transform 260ms cubic-bezier(0.32, 1.28, 0.6, 1),
+    opacity 200ms ease,
+    background 220ms ease,
+    border-color 220ms ease;
+}
+
+/* Reached the end on its own: collapse, then one soft pulse back to play */
+.scroll-control.finished {
+  animation: scroll-control-finish 620ms cubic-bezier(0.32, 1.2, 0.6, 1);
+}
+
+/* Ring only — the scale is owned by the tuck transition below */
+@keyframes scroll-control-finish {
+  0% {
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 0 rgba(79, 195, 247, 0.5);
+  }
+  100% {
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 16px rgba(79, 195, 247, 0);
+  }
+}
+
+.scroll-control.open {
+  width: 168px;
+  background: rgba(28, 28, 30, 0.9);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.control-circle {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border: none;
+  background: none;
+  border-radius: 50%;
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  pointer-events: auto;
+  padding: 0;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  transition: color 220ms ease;
 }
 
-.control-circle.active {
+/* Accent only while scrolling — so the pause glyph is the blue one */
+.scroll-control.open .control-circle {
   color: var(--accent);
+}
+
+.scroll-control .control-circle:active {
   background: rgba(79, 195, 247, 0.2);
+}
+
+.scroll-speed-btn {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.scroll-speed-btn {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border: none;
+  background: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 160ms ease;
+}
+
+.scroll-control.open .scroll-speed-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 200ms ease 140ms;
+}
+
+.scroll-control.open .scroll-speed-btn:disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.scroll-control.open .control-circle:active {
+  background: rgba(79, 195, 247, 0.2);
+}
+
+.scroll-control.open .scroll-speed-btn:active {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
 }
 
 .control-pill-right {
@@ -888,7 +1780,8 @@ body {
   padding: 0;
   background: none;
   border: none;
-  color: var(--text-muted);
+  /* White like the play glyph; accent is reserved for the active states */
+  color: #fff;
   font-size: 22px;
   cursor: pointer;
   flex-shrink: 0;
@@ -897,6 +1790,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Secondary controls stay quiet */
+.control-btn.muted {
+  color: var(--text-muted);
 }
 
 .control-btn.active {
@@ -908,7 +1806,19 @@ body {
   background: var(--accent-dim);
 }
 
-/* Preparation panel — dropdown from bottom right */
+/* At the font-size limits */
+.control-btn:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* Preparation panel — dropdown from bottom right, dismissed by tapping away */
+.prep-dismiss {
+  position: fixed;
+  inset: 0;
+  z-index: 24;
+}
+
 .prep-panel-dropdown {
   position: fixed;
   bottom: calc(68px + var(--dock));
@@ -921,10 +1831,16 @@ body {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   min-width: 240px;
   max-width: 300px;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 
 .prep-section {
-  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
 }
 
 .prep-section label {
@@ -932,7 +1848,6 @@ body {
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-muted);
-  margin-bottom: 4px;
   display: block;
 }
 
@@ -968,28 +1883,67 @@ body {
   letter-spacing: 1px;
 }
 
-.ref-tone-btn {
-  width: 100%;
-  padding: 12px;
-  border-radius: 8px;
+.prep-row button.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.prep-row button:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* Three-way split button */
+.segmented {
+  display: flex;
   border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.segmented button {
+  flex: 1;
+  min-height: 40px;
+  padding: 0 10px;
+  border: none;
   background: var(--bg-surface);
-  color: var(--text);
-  font-size: 14px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.segmented button + button {
+  border-left: 1px solid var(--border);
+}
+
+.segmented button.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* Chord colour palette */
+.swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
   cursor: pointer;
 }
 
-.prep-close {
-  width: 100%;
-  padding: 10px;
-  margin-top: 8px;
-  border-radius: 8px;
-  border: none;
-  background: var(--accent-dim);
-  color: var(--accent);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
+.swatch.active {
+  border-color: #fff;
 }
 
 /* Setlist screens */
@@ -1148,10 +2102,41 @@ body {
 }
 
 /* Song recommendations */
+/*
+ * Blank tail so scrolling can carry the last line up to mid-screen instead of
+ * stopping with it pinned to the bottom edge. The recommendations take this
+ * space over once the song ends, which keeps the scroll height roughly stable.
+ */
+.song-tail {
+  height: 48vh;
+}
+
 .song-recommendations {
+  min-height: 48vh;
   margin-top: 32px;
   padding: 16px 0;
   border-top: 1px solid var(--border);
+}
+
+/* Headings lead, then the cards cascade in behind them */
+.song-recommendations h3,
+.song-recommendations .rec-head {
+  animation: recs-in 260ms ease both;
+}
+
+.song-recommendations .rec-rail .song-card {
+  animation: recs-in 320ms cubic-bezier(0.32, 1.2, 0.6, 1) both;
+}
+
+@keyframes recs-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .song-recommendations h3 {
@@ -1194,6 +2179,12 @@ body {
   opacity: 0.6;
 }
 
+/* Leaving something, not going deeper into it */
+.rec-head-link.danger {
+  gap: 4px;
+  color: var(--danger);
+}
+
 /* Two rows of cards, scrolling sideways; bleeds into the content padding */
 .rec-rail {
   display: grid;
@@ -1216,30 +2207,87 @@ body {
   scroll-snap-align: start;
 }
 
-/* Force reload button */
-.reload-btn {
-  display: block;
-  width: 100%;
-  padding: 12px;
-  margin-top: 16px;
-  border-radius: 8px;
+/* Info button and its dropdown (version + force reload) */
+.info-menu {
+  position: relative;
+  flex: none;
+}
+
+.info-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--bg-surface);
   color: var(--text-muted);
-  font-size: 14px;
   cursor: pointer;
-  text-align: center;
 }
 
-.reload-btn:active {
+.info-btn:active,
+.info-btn.active {
   background: var(--accent-dim);
+  border-color: var(--accent);
   color: var(--accent);
 }
 
-.reload-version {
-  font-size: 12px;
+.info-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+}
+
+.info-dropdown {
+  position: absolute;
+  z-index: 16;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 190px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  animation: info-dropdown-in 160ms cubic-bezier(0.32, 1.2, 0.6, 1) both;
+}
+
+@keyframes info-dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.info-version {
+  padding: 8px 12px 10px;
+  font-size: 13px;
   color: var(--text-muted);
-  margin-left: 8px;
+}
+
+.info-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.info-action:active {
+  background: var(--accent-dim);
+  color: var(--accent);
 }
 
 /* Autoscroll position indicator */
@@ -1254,4 +2302,124 @@ body {
   z-index: 15;
   pointer-events: none;
   transition: top 0.1s linear;
+}
+
+/* ─── Normalized ChordPro extensions ───────────────────────────────────────
+   Tabs, annotations, comments, repeat groups and column breaks — see
+   scripts/normalize-chordpro.mjs and src/lib/parser.ts. */
+
+/* Tab blocks are verbatim; monospace is the only way the frets line up. */
+.tab-block {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.78em;
+  line-height: 1.25;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  white-space: pre;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.section-tab {
+  overflow-x: auto;
+}
+
+/* [*text] — a performance cue sitting in the chord slot. Distinct from a
+   chord because it is never transposed and never has a diagram. */
+.annotation-slot {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-style: italic;
+  text-transform: none;
+}
+
+/* {c:} / {ci:} / {cb:} */
+.song-comment {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin: 4px 0;
+}
+
+.comment-italic {
+  font-style: italic;
+}
+
+.comment-box {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+/* {chorus} — play the chorus again here */
+.chorus-recall {
+  display: inline-block;
+  margin: 8px 0;
+  padding: 2px 10px;
+  border-left: 3px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* {x_repeat: n} on a whole block */
+.section-repeat {
+  float: right;
+  color: var(--accent);
+  font-size: 0.8em;
+  font-weight: 700;
+}
+
+/* {x_repeat_start: n} … {x_repeat_end} */
+.repeat-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--text-muted);
+}
+
+.repeat-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.repeat-count {
+  flex: none;
+  align-self: flex-start;
+  color: var(--accent);
+  font-size: 0.8em;
+  font-weight: 700;
+}
+
+/* {column_break: lg} — two columns once there is room for them, which is
+   what the marker was authored for: landscape tablets around 1024px. */
+.column-break {
+  display: none;
+}
+
+@media (min-width: 1024px) and (orientation: landscape) {
+  .song-columns {
+    column-count: 2;
+    column-gap: 32px;
+    overflow-x: visible;
+  }
+
+  .song-columns .column-break.bp-lg {
+    display: block;
+    break-after: column;
+    -webkit-column-break-after: column;
+    height: 0;
+  }
+
+  .song-columns .section,
+  .song-columns .repeat-group,
+  .song-columns .tab-block {
+    break-inside: avoid;
+  }
 }

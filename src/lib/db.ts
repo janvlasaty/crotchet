@@ -2,8 +2,9 @@
  * IndexedDB storage layer using the `idb` library.
  */
 import { openDB, type IDBPDatabase } from 'idb';
-import type { Song, SongPrefs, PlayRecord, Setlist, SongIndex } from '../types';
+import type { Song, SongPrefs, PlayRecord, Setlist, SongIndex, ChordMode } from '../types';
 import { parseChordPro, extractPlainText, extractChords, normalizeForSearch } from './parser';
+import { DEFAULT_CHORD_COLOR } from './chordColors';
 
 const DB_NAME = 'zpevnik';
 const DB_VERSION = 2;
@@ -83,7 +84,7 @@ export function buildSongIndex(id: string, chordpro: string): SongIndex {
     originalKey: parsed.key,
     chords,
     tempo: parsed.tempo,
-    sectionCount: parsed.items.filter(i => i.type !== 'raw').length,
+    sectionCount: parsed.items.filter(i => 'lines' in i).length,
   };
 }
 
@@ -117,37 +118,93 @@ export async function deleteSong(id: string): Promise<void> {
 /** Global app settings stored in localStorage */
 export interface AppSettings {
   fontScale: number;
-  chordsVisible: boolean;
+  chordMode: ChordMode;
+  chordColor: string;
 }
 
 const APP_SETTINGS_KEY = 'zpevnik-settings';
 
+const APP_SETTINGS_DEFAULTS: AppSettings = {
+  fontScale: 1,
+  chordMode: 'all',
+  chordColor: DEFAULT_CHORD_COLOR,
+};
+
 export function getAppSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(APP_SETTINGS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const stored = JSON.parse(raw) as Partial<AppSettings> & { chordsVisible?: boolean };
+      return {
+        ...APP_SETTINGS_DEFAULTS,
+        ...stored,
+        // Settings written before the three-way mode existed
+        chordMode: stored.chordMode ?? (stored.chordsVisible === false ? 'none' : 'all'),
+      };
+    }
   } catch { /* ignore */ }
-  return { fontScale: 1, chordsVisible: true };
+  return { ...APP_SETTINGS_DEFAULTS };
 }
 
 export function saveAppSettings(settings: AppSettings): void {
   localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(settings));
 }
 
-/** Get or create song prefs (uses global defaults) */
-export async function getSongPrefs(songId: string): Promise<SongPrefs> {
+/**
+ * Home screen's recently-played rail, cached so it paints on the first frame
+ * instead of appearing once IndexedDB has answered.
+ */
+export interface RecentEntry {
+  id: string;
+  title: string;
+  artist: string;
+}
+
+const RECENT_CACHE_KEY = 'zpevnik-recent';
+
+export function getRecentCache(): RecentEntry[] {
+  try {
+    const raw = localStorage.getItem(RECENT_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveRecentCache(entries: RecentEntry[]): void {
+  try {
+    localStorage.setItem(RECENT_CACHE_KEY, JSON.stringify(entries));
+  } catch { /* quota or private mode — the rail just recomputes next time */ }
+}
+
+/**
+ * Get or create song prefs (uses global defaults).
+ * `fileCapo` is the song's own `{capo}` — it seeds a fresh row so the song
+ * first opens exactly as it was written down. A stored row always wins.
+ */
+export async function getSongPrefs(
+  songId: string,
+  fileCapo: number | null = null
+): Promise<SongPrefs> {
   const db = await getDB();
   const prefs = await db.get('prefs', songId);
-  if (prefs) return prefs;
+  if (prefs) return { ...prefs, chordMode: resolveChordMode(prefs) };
   const defaults = getAppSettings();
   return {
     songId,
     transpose: 0,
-    capo: null,
+    capo: fileCapo,
     fontScale: defaults.fontScale,
     tempo: null,
-    chordsVisible: defaults.chordsVisible,
+    chordMode: defaults.chordMode,
   };
+}
+
+/** Rows written before chordMode carried a boolean instead. */
+function resolveChordMode(prefs: SongPrefs): ChordMode {
+  if (prefs.chordMode) return prefs.chordMode;
+  return prefs.chordsVisible === false ? 'none' : 'all';
 }
 
 /** Save song prefs */

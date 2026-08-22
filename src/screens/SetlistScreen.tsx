@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getAllSetlists, saveSetlist, deleteSetlist, getAllSongs } from '../lib/db';
-import { ChevronLeft, Plus, Trash2, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { getAllSetlists, getSetlist, saveSetlist, deleteSetlist, getAllSongs } from '../lib/db';
+import { FloatingHeader, useHeaderReveal } from '../components/FloatingHeader';
+import { SearchFab, SearchPlusIcon, songCountLabel } from '../components/SearchFab';
+import { ChevronLeft, Plus, Trash2, X, GripVertical } from 'lucide-react';
 import type { Setlist, Song } from '../types';
 
 export const SetlistScreen: React.FC = () => {
@@ -79,92 +81,246 @@ export const SetlistDetailScreen: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [setlist, setSetlist] = useState<Setlist | null>(null);
   const [allSongs, setAllSongs] = useState<Song[]>([]);
-  const [showAdd, setShowAdd] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  /** Non-null while the rename dialog is open, holding the edited name. */
+  const [renameTo, setRenameTo] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const { revealed, heroRef, scrimRef, updateReveal } = useHeaderReveal();
+  /** Row being dragged, and the pointer Y its current slot was claimed at. */
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const dragAnchorY = useRef(0);
 
   useEffect(() => {
-    async function load() {
-      const { getSetlist } = await import('../lib/db');
-      if (!id) return;
-      const sl = await getSetlist(id);
+    if (!id) return;
+    Promise.all([getSetlist(id), getAllSongs()]).then(([sl, songs]) => {
       if (sl) setSetlist(sl);
-      const songs = await getAllSongs();
       setAllSongs(songs);
-    }
-    load();
+    });
   }, [id]);
 
-  const handleAddSong = async (songId: string) => {
+  const persist = useCallback(async (songIds: string[]) => {
+    setSetlist(current => {
+      if (!current) return current;
+      const updated = { ...current, songIds };
+      saveSetlist(updated);
+      return updated;
+    });
+  }, []);
+
+  /** Search picks toggle membership, so a mis-tap is undone with a second tap. */
+  const handleToggleSong = useCallback((songId: string) => {
+    setSetlist(current => {
+      if (!current) return current;
+      const songIds = current.songIds.includes(songId)
+        ? current.songIds.filter(s => s !== songId)
+        : [...current.songIds, songId];
+      const updated = { ...current, songIds };
+      saveSetlist(updated);
+      return updated;
+    });
+  }, []);
+
+  const handleRemoveSong = useCallback(
+    (songId: string) => {
+      setSetlist(current => {
+        if (!current) return current;
+        const updated = { ...current, songIds: current.songIds.filter(s => s !== songId) };
+        saveSetlist(updated);
+        return updated;
+      });
+    },
+    []
+  );
+
+  /** Copy under a fresh id, then open it — the original is left alone. */
+  const handleDuplicate = useCallback(async () => {
     if (!setlist) return;
-    const updated = { ...setlist, songIds: [...setlist.songIds, songId] };
+    const copy: Setlist = {
+      id: Date.now().toString(36),
+      name: `${setlist.name} (kopie)`,
+      songIds: [...setlist.songIds],
+      createdAt: Date.now(),
+    };
+    await saveSetlist(copy);
+    navigate(`/setlist/${copy.id}`, { replace: true });
+  }, [setlist, navigate]);
+
+  const handleRename = useCallback(async () => {
+    const name = renameTo?.trim();
+    if (!setlist || !name) return;
+    const updated = { ...setlist, name };
     await saveSetlist(updated);
     setSetlist(updated);
-    setShowAdd(false);
+    setRenameTo(null);
+  }, [renameTo, setlist]);
+
+  const handleDeleteSetlist = useCallback(async () => {
+    if (!id) return;
+    await deleteSetlist(id);
+    navigate('/', { replace: true });
+  }, [id, navigate]);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) updateReveal(el);
+  }, [updateReveal]);
+
+  /* Drag to reorder: the list reshuffles under the finger as it crosses rows,
+     so there is no ghost element to position. */
+  const startDrag = (index: number) => (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragAnchorY.current = e.clientY;
+    setDragIndex(index);
   };
 
-  const handleRemoveSong = async (songId: string) => {
-    if (!setlist) return;
-    const updated = { ...setlist, songIds: setlist.songIds.filter(s => s !== songId) };
-    await saveSetlist(updated);
-    setSetlist(updated);
-  };
+  const onDragMove = (e: React.PointerEvent) => {
+    if (dragIndex === null || !setlist) return;
+    const rowHeight = listRef.current?.firstElementChild?.getBoundingClientRect().height ?? 56;
+    const delta = e.clientY - dragAnchorY.current;
+    if (Math.abs(delta) < rowHeight * 0.6) return;
 
-  const handleMoveSong = async (fromIdx: number, toIdx: number) => {
-    if (!setlist) return;
+    const direction = delta > 0 ? 1 : -1;
+    const target = dragIndex + direction;
+    if (target < 0 || target >= setlist.songIds.length) return;
+
     const ids = [...setlist.songIds];
-    const [moved] = ids.splice(fromIdx, 1);
-    ids.splice(toIdx, 0, moved);
-    const updated = { ...setlist, songIds: ids };
-    await saveSetlist(updated);
-    setSetlist(updated);
+    [ids[dragIndex], ids[target]] = [ids[target], ids[dragIndex]];
+    persist(ids);
+    dragAnchorY.current += direction * rowHeight;
+    setDragIndex(target);
   };
+
+  const endDrag = () => setDragIndex(null);
 
   if (!setlist) return <div className="screen loading">Načítám…</div>;
 
   const songsInSetlist = setlist.songIds
-    .map(id => allSongs.find(s => s.id === id))
+    .map(songId => allSongs.find(s => s.id === songId))
     .filter((s): s is Song => !!s);
-
-  const songsNotInSetlist = allSongs.filter(s => !setlist.songIds.includes(s.id));
 
   return (
     <div className="screen setlist-detail-screen">
-      <header className="screen-header">
-        <button className="back-btn" onClick={() => navigate('/setlists')}><ChevronLeft size={24} strokeWidth={2.5} /></button>
-        <h1>{setlist.name}</h1>
-        <button className="add-btn" onClick={() => setShowAdd(!showAdd)}><Plus size={24} strokeWidth={2.5} /></button>
-      </header>
+      <FloatingHeader
+        title={setlist.name}
+        subtitle={songCountLabel(songsInSetlist.length)}
+        icon={<X size={22} strokeWidth={2.5} />}
+        actionLabel="Zavřít"
+        onAction={() => navigate('/')}
+        revealed={revealed}
+        onTitleClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+        scrimRef={scrimRef}
+      />
 
-      {showAdd && (
-        <div className="add-song-list">
-          <h3>Přidat píseň</h3>
-          {songsNotInSetlist.map(s => (
-            <div key={s.id} className="song-list-item" onClick={() => handleAddSong(s.id)}>
-              <div className="song-title">{s.index.title}</div>
-              <div className="song-artist">{s.index.artist}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="setlist-songs">
-        {songsInSetlist.map((s, idx) => (
-          <div key={s.id} className="setlist-song-item">
-            <span className="song-order">{idx + 1}.</span>
-            <div className="song-info" onClick={() => navigate(`/play/${s.id}?setlist=${setlist.id}&idx=${idx}`)}>
-              <div className="song-title">{s.index.title}</div>
-              <div className="song-artist">{s.index.artist}</div>
-            </div>
-            <div className="song-actions">
-              {idx > 0 && <button onClick={() => handleMoveSong(idx, idx - 1)}><ChevronUp size={16} /></button>}
-              {idx < songsInSetlist.length - 1 && <button onClick={() => handleMoveSong(idx, idx + 1)}><ChevronDown size={16} /></button>}
-              <button onClick={() => handleRemoveSong(s.id)}><X size={16} /></button>
-            </div>
+      <div className="page-scroll" ref={scrollRef} onScroll={handleScroll}>
+        <header className="hero" ref={heroRef}>
+          <h1 className="hero-title">{setlist.name}</h1>
+          <div className="hero-meta">
+            <span>{songCountLabel(songsInSetlist.length)}</span>
+            <button className="meta-chip" onClick={() => setRenameTo(setlist.name)}>
+              PŘEJMENOVAT
+            </button>
+            <button className="meta-chip" onClick={handleDuplicate}>
+              DUPLIKOVAT
+            </button>
+            <button className="meta-chip danger" onClick={() => setConfirmDelete(true)}>
+              SMAZAT
+            </button>
           </div>
-        ))}
-        {songsInSetlist.length === 0 && (
-          <div className="empty-state">Setlist je prázdný</div>
+        </header>
+
+        {songsInSetlist.length === 0 ? (
+          <div className="empty-state">
+            Setlist je prázdný — přidej písně hledáním
+          </div>
+        ) : (
+          <div className="setlist-rows" ref={listRef}>
+            {songsInSetlist.map((s, idx) => (
+              <div key={s.id} className={`setlist-row ${dragIndex === idx ? 'dragging' : ''}`}>
+                <span className="setlist-order">{idx + 1}</span>
+                <div
+                  className="setlist-row-main"
+                  // The play screen finds its place in the queue from the song id
+                  onClick={() => navigate(`/play/${s.id}?setlist=${setlist.id}`)}
+                >
+                  <div className="song-title">{s.index.title}</div>
+                  <div className="song-artist">{s.index.artist}</div>
+                </div>
+                <button
+                  className="setlist-row-btn"
+                  onClick={() => handleRemoveSong(s.id)}
+                  aria-label="Odebrat ze setlistu"
+                >
+                  <X size={18} strokeWidth={2.5} />
+                </button>
+                <button
+                  className="setlist-row-btn drag-handle"
+                  onPointerDown={startDrag(idx)}
+                  onPointerMove={onDragMove}
+                  onPointerUp={endDrag}
+                  onPointerCancel={endDrag}
+                  aria-label="Přesunout"
+                >
+                  <GripVertical size={18} strokeWidth={2.5} />
+                </button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
+
+      {renameTo !== null && (
+        <>
+          <div className="modal-scrim" onClick={() => setRenameTo(null)} />
+          <div className="modal-card" role="dialog" aria-label="Přejmenovat setlist">
+            <h3>Přejmenovat setlist</h3>
+            <input
+              type="text"
+              placeholder="Název setlistu"
+              value={renameTo}
+              onChange={e => setRenameTo(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleRename();
+                if (e.key === 'Escape') setRenameTo(null);
+              }}
+              autoFocus
+            />
+            <div className="modal-actions">
+              <button className="modal-btn" onClick={() => setRenameTo(null)}>Zrušit</button>
+              <button
+                className="modal-btn primary"
+                onClick={handleRename}
+                disabled={!renameTo.trim()}
+              >
+                Uložit
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {confirmDelete && (
+        <>
+          <div className="modal-scrim" onClick={() => setConfirmDelete(false)} />
+          <div className="modal-card" role="dialog" aria-label="Smazat setlist">
+            <h3>Smazat „{setlist.name}“?</h3>
+            <div className="modal-actions">
+              <button className="modal-btn" onClick={() => setConfirmDelete(false)}>Zrušit</button>
+              <button className="modal-btn primary" onClick={handleDeleteSetlist}>Smazat</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* The same search as everywhere else, wired to add rather than navigate */}
+      <SearchFab
+        icon={<SearchPlusIcon />}
+        multiPick
+        pickedIds={setlist.songIds}
+        onPickSong={handleToggleSong}
+        onPickArtist={artist => navigate(`/artist/${encodeURIComponent(artist)}`)}
+      />
     </div>
   );
 };

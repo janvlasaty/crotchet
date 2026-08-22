@@ -24,6 +24,8 @@ export function useHeaderReveal() {
 interface FloatingHeaderProps {
   /** Compact title, revealed once the hero has scrolled away */
   title: string;
+  /** Small muted line under the title (e.g. the artist) */
+  subtitle?: string;
   /** Trailing detail next to the title, accent-coloured (e.g. the current key) */
   accessory?: React.ReactNode;
   /** Glyph for the circular button on the left */
@@ -38,6 +40,7 @@ interface FloatingHeaderProps {
 /** Circular action button + revealing centered title over a top-edge scrim. */
 export const FloatingHeader: React.FC<FloatingHeaderProps> = ({
   title,
+  subtitle,
   accessory,
   icon,
   actionLabel,
@@ -55,7 +58,10 @@ export const FloatingHeader: React.FC<FloatingHeaderProps> = ({
     </button>
 
     <div className={`floating-title ${revealed ? 'visible' : ''}`} onClick={onTitleClick}>
-      <span className="floating-title-name">{title}</span>
+      <span className="floating-title-text">
+        <span className="floating-title-name">{title}</span>
+        {subtitle && <span className="floating-title-sub">{subtitle}</span>}
+      </span>
       {accessory && <span className="floating-title-accessory">{accessory}</span>}
     </div>
   </>
