@@ -13,7 +13,7 @@
  */
 
 /** Reads the four `env(safe-area-inset-*)` values as they resolve right now. */
-function readInsets(): { t: number; r: number; b: number; l: number } {
+export function readInsets(): { t: number; r: number; b: number; l: number } {
   const probe = document.createElement('div');
   probe.style.cssText =
     'position:fixed;visibility:hidden;pointer-events:none;' +
@@ -61,6 +61,7 @@ export function viewportInfo(): ViewportInfo {
       `screen ${window.screen.width}×${window.screen.height} @${window.devicePixelRatio}`,
       vv ? `visual ${Math.round(vv.width)}×${Math.round(vv.height)} off ${Math.round(vv.offsetTop)}` : 'visual n/a',
       `inset t${i.t} r${i.r} b${i.b} l${i.l}`,
+      `--sat ${getComputedStyle(document.documentElement).getPropertyValue('--sat').trim()}`,
       `standalone ${standalone ? 'yes' : 'no'}`,
       letterboxed ? 'LETTERBOXED' : 'full height',
     ],
