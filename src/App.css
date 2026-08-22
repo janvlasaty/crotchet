@@ -36,14 +36,8 @@
   --danger: #ff6b6b;
   --border: #333;
 
-  /* Safe-area inset aliases */
-  --sat: env(safe-area-inset-top, 0px);
-  --sar: env(safe-area-inset-right, 0px);
-  --sab: env(safe-area-inset-bottom, 0px);
-  --sal: env(safe-area-inset-left, 0px);
-
-  /* Floating controls sit inside the home-indicator inset, not above it */
-  --dock: max(8px, calc(var(--sab) - 22px));
+  /* On-screen keyboard height, kept current by src/lib/keyboardInset.ts */
+  --kb: 0px;
 
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   /* Serif display face for the app name */
@@ -118,7 +112,7 @@ body {
   background: var(--accent);
   color: #000;
   text-align: center;
-  padding: calc(8px + var(--sat)) max(16px, var(--sar)) 8px max(16px, var(--sal));
+  padding: 8px 16px 8px 16px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
@@ -144,7 +138,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: calc(16px + var(--sat)) max(20px, var(--sar)) 8px max(20px, var(--sal));
+  padding: 16px 20px 8px 20px;
 }
 
 .home-header h1 {
@@ -158,13 +152,13 @@ body {
 .home-scroll {
   flex: 1;
   overflow-y: auto;
-  padding-bottom: calc(96px + var(--sab));
+  padding-bottom: 96px;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
 }
 
 .home-section {
-  padding: 8px max(20px, var(--sar)) 8px max(20px, var(--sal));
+  padding: 8px 20px 8px 20px;
 }
 
 .home-section h2 {
@@ -335,8 +329,8 @@ body {
   position: fixed;
   z-index: 51;
   top: 50%;
-  left: max(20px, var(--sal));
-  right: max(20px, var(--sar));
+  left: 20px;
+  right: 20px;
   transform: translateY(-60%);
   max-width: 360px;
   margin: 0 auto;
@@ -599,8 +593,8 @@ body {
 /* Floating search button — bottom left; expands into a pill with the input */
 .search-fab {
   position: fixed;
-  bottom: calc(16px + var(--sab));
-  left: max(16px, var(--sal));
+  bottom: calc(16px + var(--kb));
+  left: 16px;
   box-sizing: border-box;
   width: 56px;
   height: 56px;
@@ -624,12 +618,12 @@ body {
 
 /* Play screen: sit exactly where the play button was, so one replaces the other */
 .search-fab.in-control-bar {
-  bottom: var(--dock);
-  left: max(12px, var(--sal));
+  bottom: calc(8px + var(--kb));
+  left: 12px;
 }
 
 .search-fab.in-control-bar.open {
-  width: calc(100vw - max(12px, var(--sal)) - max(12px, var(--sar)));
+  width: calc(100vw - 24px);
 }
 
 /* Scaled out while the other control owns the corner */
@@ -641,7 +635,7 @@ body {
 }
 
 .search-fab.open {
-  width: calc(100vw - max(16px, var(--sal)) - max(16px, var(--sar)));
+  width: calc(100vw - 32px);
   background: rgba(28, 28, 30, 0.95);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
   -webkit-backdrop-filter: blur(20px);
@@ -742,7 +736,7 @@ body {
 .alpha-picker {
   display: flex;
   align-items: center;
-  margin: 0 calc(-1 * max(20px, var(--sal))) 12px calc(-1 * max(20px, var(--sar)));
+  margin: 0 -20px 12px -20px;
   padding: 4px 0 8px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -838,14 +832,14 @@ body {
 .page-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: calc(80px + var(--sat)) max(20px, var(--sar)) calc(24px + var(--sab)) max(20px, var(--sal));
+  padding: 80px 20px 24px 20px;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
 }
 
 /* Clears the floating search button, so the last row is never hidden by it */
 .page-scroll {
-  padding-bottom: calc(96px + var(--sab));
+  padding-bottom: 96px;
 }
 
 /* Search — dropdown above the field, page stays visible */
@@ -875,10 +869,10 @@ body {
 /* Results sit straight on the blurred backdrop — the cards are the only chrome */
 .search-results {
   position: fixed;
-  top: calc(12px + var(--sat));
-  bottom: 0;
-  left: max(16px, var(--sal));
-  right: max(16px, var(--sar));
+  top: 12px;
+  bottom: var(--kb);
+  left: 16px;
+  right: 16px;
   z-index: 40;
   display: flex;
   flex-direction: column;
@@ -886,7 +880,7 @@ body {
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   /* Content scrolls under the pill; the fade below hides the hand-off */
-  padding-bottom: calc(88px + var(--sab));
+  padding-bottom: 88px;
   animation: search-results-in 220ms cubic-bezier(0.32, 1.2, 0.6, 1);
 }
 
@@ -945,8 +939,8 @@ body {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
-  height: calc(120px + var(--sab));
+  bottom: var(--kb);
+  height: 120px;
   z-index: 41;
   pointer-events: none;
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.75) 45%, #000 100%);
@@ -967,8 +961,8 @@ body {
 /* Floating back button - circle */
 .back-btn-floating {
   position: fixed;
-  top: calc(12px + var(--sat));
-  left: max(12px, var(--sal));
+  top: 12px;
+  left: 12px;
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -999,14 +993,14 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: calc(76px + var(--sat));
+  height: 76px;
   z-index: 29;
   pointer-events: none;
   background: linear-gradient(
     to bottom,
     #000 0,
-    #000 var(--sat),
-    rgba(0, 0, 0, 0.96) calc(var(--sat) + 44px),
+    #000 0,
+    rgba(0, 0, 0, 0.96) 44px,
     rgba(0, 0, 0, 0) 100%
   );
 }
@@ -1014,7 +1008,7 @@ body {
 /* Centered song title — plain text, no pill */
 .floating-title {
   position: fixed;
-  top: calc(12px + var(--sat));
+  top: 12px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -1079,8 +1073,8 @@ body {
   overflow-y: auto;
   /* Bottom clearance is exactly the floating control bar's height — the song
      ends as close to the edge as it can without hiding behind the buttons. */
-  padding: calc(80px + var(--sat)) max(20px, var(--sar)) calc(56px + var(--dock))
-    max(20px, var(--sal));
+  padding: 80px 20px 64px
+    20px;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
 }
@@ -1634,9 +1628,9 @@ body {
 /* Play controls — floating bar: circle left, pill right */
 .play-controls-bar {
   position: fixed;
-  bottom: var(--dock);
-  left: max(12px, var(--sal));
-  right: max(12px, var(--sar));
+  bottom: 8px;
+  left: 12px;
+  right: 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1825,8 +1819,8 @@ body {
 
 .prep-panel-dropdown {
   position: fixed;
-  bottom: calc(68px + var(--dock));
-  right: max(12px, var(--sar));
+  bottom: 76px;
+  right: 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -1955,7 +1949,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: calc(12px + var(--sat)) max(16px, var(--sar)) 12px max(16px, var(--sal));
+  padding: 12px 16px 12px 16px;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -2012,7 +2006,7 @@ body {
 .setlist-list, .setlist-songs {
   flex: 1;
   overflow-y: auto;
-  padding: 0 max(20px, var(--sar)) calc(80px + var(--sab)) max(20px, var(--sal));
+  padding: 0 20px 80px 20px;
   overscroll-behavior-y: contain;
 }
 
@@ -2101,7 +2095,7 @@ body {
 .search-results {
   flex: 1;
   overflow-y: auto;
-  padding: 0 max(20px, var(--sar)) calc(80px + var(--sab)) max(20px, var(--sal));
+  padding: 0 20px 80px 20px;
   overscroll-behavior-y: contain;
 }
 
@@ -2201,10 +2195,10 @@ body {
   -webkit-overflow-scrolling: touch;
   scroll-snap-type: x proximity;
   /* Snapport is the padding box, so inset it or the first card snaps past the padding */
-  scroll-padding-left: max(20px, var(--sal));
-  scroll-padding-right: max(20px, var(--sar));
-  padding: 2px max(20px, var(--sar)) 6px max(20px, var(--sal));
-  margin: 0 calc(-1 * max(20px, var(--sar))) 0 calc(-1 * max(20px, var(--sal)));
+  scroll-padding-left: 20px;
+  scroll-padding-right: 20px;
+  padding: 2px 20px 6px 20px;
+  margin: 0 -20px 0 -20px;
 }
 
 .rec-rail .song-card {

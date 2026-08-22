@@ -2,15 +2,14 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import App from './App';
+import { installKeyboardInset } from './lib/keyboardInset';
 import './index.css';
-// TEMPORARY: layout debugging for the iOS bottom-of-screen issue. Remove this
-// import and src/lib/debugOverlay.ts once it is resolved.
-import { mountDebugOverlay } from './lib/debugOverlay';
 
 // Register service worker for offline support
 registerSW({ immediate: true });
 
-mountDebugOverlay();
+// Lets the search panel resize to the space the keyboard leaves.
+installKeyboardInset();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
