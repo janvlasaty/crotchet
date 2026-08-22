@@ -34,6 +34,11 @@ export function readInsets(): { t: number; r: number; b: number; l: number } {
   return insets;
 }
 
+/** Resolved value of a custom property on the root element. */
+function cssVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '?';
+}
+
 export interface ViewportInfo {
   lines: string[];
   /** True when the window is measurably shorter than the screen it sits on. */
@@ -61,7 +66,8 @@ export function viewportInfo(): ViewportInfo {
       `screen ${window.screen.width}×${window.screen.height} @${window.devicePixelRatio}`,
       vv ? `visual ${Math.round(vv.width)}×${Math.round(vv.height)} off ${Math.round(vv.offsetTop)}` : 'visual n/a',
       `inset t${i.t} r${i.r} b${i.b} l${i.l}`,
-      `--sat ${getComputedStyle(document.documentElement).getPropertyValue('--sat').trim()}`,
+      `--sat ${cssVar('--sat')} --sab ${cssVar('--sab')}`,
+      `dead strip ${Math.max(0, screenH - window.innerHeight)}`,
       `standalone ${standalone ? 'yes' : 'no'}`,
       letterboxed ? 'LETTERBOXED' : 'full height',
     ],
