@@ -2,10 +2,19 @@
 <html lang="cs">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <!-- Deliberately NOT opting into edge-to-edge. `viewport-fit=cover` plus
+         `apple-mobile-web-app-status-bar-style: black-translucent` is what makes
+         an installed iOS app draw under the status bar, and it comes at a price:
+         iOS then reports a layout viewport one status-bar shorter than the
+         window it actually gives us, so `position: fixed; bottom: 0` lands ~50pt
+         above the screen edge and every safe-area inset has to be unpicked by
+         hand. Without the opt-in, iOS insets the web view from the unsafe
+         regions itself: every inset is 0, `bottom: 0` *is* the safe bottom, and
+         the home indicator simply floats over the bottom bar the way iOS
+         intends. Standalone mode comes from the manifest's `display` (iOS 16.4+)
+         and the status bar is drawn by the system, tinted from theme-color. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
     <meta name="theme-color" content="#000000" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
     <title>Zpěvník</title>
   </head>
