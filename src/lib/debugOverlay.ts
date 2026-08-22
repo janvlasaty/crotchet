@@ -56,8 +56,20 @@ export function mountDebugOverlay(): void {
   };
   paint();
 
+  // Anchored to the bottom of a box sized exactly like the app shell, so it
+  // marks where our content now ends — as opposed to WIN BOTTOM, which sits at
+  // the bottom of the short layout viewport iOS reports. If APP BOTTOM lands on
+  // the physical edge of the screen and WIN BOTTOM sits above it, the shell has
+  // claimed the strip that was going unused.
+  const shell = document.createElement('div');
+  shell.style.cssText =
+    'position:fixed;top:0;left:0;width:100%;height:100vh;' +
+    'z-index:99996;pointer-events:none';
+  shell.appendChild(edge('bottom', '#ff00ff', 'APP BOTTOM'));
+
   document.body.append(
     band,
+    shell,
     edge('top', '#00ff66', 'WIN TOP'),
     edge('bottom', '#ff2222', 'WIN BOTTOM'),
     box,

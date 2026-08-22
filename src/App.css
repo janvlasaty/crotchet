@@ -58,22 +58,46 @@
   padding: 0;
 }
 
+/* The app shell is pinned to the window rather than laid out in flow, so it
+   needs an explicit height — and on iOS that height is the whole problem.
+
+   An installed iOS PWA gets a window the full height of the screen (content
+   really does draw under the status bar), but on cold start iOS reports a
+   *layout viewport* one status-bar shorter: 762 on an 812pt phone. Anything
+   sized against that short value — `inset: 0`, `bottom: 0`, `100%`, `100dvh`,
+   `100svh` — leaves a 50pt strip of the screen unused at the bottom until the
+   device is rotated. `100vh` reports the true 812 straight away, so it is the
+   one unit worth pinning the shell to in standalone mode.
+
+   In a browser tab the situation reverses: there `100vh` is the *large*
+   viewport, which runs behind Safari's collapsing toolbar, so the shell tracks
+   `100dvh` and follows the visible area instead. */
+body,
+#root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+@media (display-mode: standalone) {
+  body,
+  #root {
+    height: 100vh;
+  }
+}
+
 body {
   margin: 0;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
-  /* Prevent pull-to-refresh and overscroll bounce */
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
 }
 
 #root {
-  position: fixed;
-  inset: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 /* PWA touch behavior on app chrome (not content areas) */
