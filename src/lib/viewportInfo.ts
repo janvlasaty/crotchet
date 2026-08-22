@@ -34,6 +34,24 @@ export function readInsets(): { t: number; r: number; b: number; l: number } {
   return insets;
 }
 
+/**
+ * Height a given CSS length actually resolves to, right now.
+ *
+ * The viewport units are the interesting part: if iOS has handed us a stale
+ * `innerHeight` on cold start, `100vh` / `100lvh` can still resolve to the real
+ * screen height, which would mean the missing strip is ours to claim after all.
+ */
+export function probeHeight(css: string): number {
+  const el = document.createElement('div');
+  el.style.cssText =
+    `position:fixed;top:0;left:0;width:1px;height:${css};` +
+    'visibility:hidden;pointer-events:none';
+  document.body.appendChild(el);
+  const h = Math.round(el.getBoundingClientRect().height);
+  el.remove();
+  return h;
+}
+
 /** Resolved value of a custom property on the root element. */
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '?';
@@ -66,8 +84,13 @@ export function viewportInfo(): ViewportInfo {
       `screen ${window.screen.width}×${window.screen.height} @${window.devicePixelRatio}`,
       vv ? `visual ${Math.round(vv.width)}×${Math.round(vv.height)} off ${Math.round(vv.offsetTop)}` : 'visual n/a',
       `inset t${i.t} r${i.r} b${i.b} l${i.l}`,
+      `vh ${probeHeight('100vh')} lvh ${probeHeight('100lvh')}`,
+      `dvh ${probeHeight('100dvh')} svh ${probeHeight('100svh')}`,
+      `clientH ${document.documentElement.clientHeight} rootH ${Math.round(
+        document.getElementById('root')?.getBoundingClientRect().height ?? 0,
+      )}`,
       `--sat ${cssVar('--sat')} --sab ${cssVar('--sab')}`,
-      `dead strip ${Math.max(0, screenH - window.innerHeight)}`,
+      `short by ${Math.max(0, screenH - window.innerHeight)}`,
       `standalone ${standalone ? 'yes' : 'no'}`,
       letterboxed ? 'LETTERBOXED' : 'full height',
     ],
