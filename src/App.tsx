@@ -1,13 +1,27 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { HomeScreen } from './screens/HomeScreen';
 import { PlayScreen } from './screens/PlayScreen';
 import { SetlistScreen, SetlistDetailScreen } from './screens/SetlistScreen';
 import { ArtistScreen } from './screens/ArtistScreen';
+import { refreshAppHeight } from './lib/appHeight';
 import { seedSongsIfNeeded } from './lib/db';
 import { checkForUpdate, shouldCheckForUpdate, applyUpdate } from './lib/version';
 import { songFiles } from './songs';
 import './App.css';
+
+/**
+ * Re-measures the shell height on every navigation. Safari has been seen to
+ * drop viewport values back to their unset state after a client-side route
+ * change in standalone mode, and no resize event fires when that happens.
+ */
+function AppHeightOnNavigate() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    refreshAppHeight();
+  }, [pathname]);
+  return null;
+}
 
 function App() {
   const [ready, setReady] = useState(false);
@@ -51,6 +65,7 @@ function App() {
 
   return (
     <BrowserRouter basename={basename}>
+      <AppHeightOnNavigate />
       {updateAvailable && (
         <div className="update-banner" onClick={() => applyUpdate()}>
           Nová verze {updateAvailable} — obnovit

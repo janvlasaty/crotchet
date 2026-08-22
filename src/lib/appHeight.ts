@@ -46,9 +46,34 @@ function apply(): void {
   document.documentElement.style.setProperty('--app-h', `${height}px`);
 }
 
-export function installAppHeight(): void {
+/**
+ * Re-measure now and again shortly after.
+ *
+ * iOS leaves viewport dimensions stale for several hundred milliseconds after a
+ * rotation, and can report them wrong on a cold start, so a single reading is
+ * not enough. Each pass overwrites the last rather than accumulating a maximum —
+ * a rotation legitimately *shrinks* the height, and a sticky maximum would leave
+ * the shell taller than the screen in landscape.
+ */
+function schedule(): void {
   apply();
+  requestAnimationFrame(apply);
+  for (const delay of [100, 350, 700]) setTimeout(apply, delay);
+}
+
+/** Re-measure after a client-side navigation, which fires no resize event. */
+export function refreshAppHeight(): void {
+  schedule();
+}
+
+export function installAppHeight(): void {
+  schedule();
   window.addEventListener('resize', apply);
-  window.addEventListener('orientationchange', apply);
+  window.addEventListener('orientationchange', schedule);
   window.visualViewport?.addEventListener('resize', apply);
+  // A standalone app is suspended rather than closed; returning to it can hand
+  // back stale dimensions the same way a cold start does.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) schedule();
+  });
 }
