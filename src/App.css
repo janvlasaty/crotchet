@@ -69,24 +69,18 @@
    device is rotated. `100vh` reports the true 812 straight away, so it is the
    one unit worth pinning the shell to in standalone mode.
 
-   In a browser tab the situation reverses: there `100vh` is the *large*
-   viewport, which runs behind Safari's collapsing toolbar, so the shell tracks
-   `100dvh` and follows the visible area instead. */
+   `--app-h` is measured in src/lib/appHeight.ts, which picks the right height
+   per context — `100vh` in a standalone window, the visible height in a browser
+   tab, where `100vh` would instead run behind Safari's collapsing toolbar. The
+   `100dvh` fallback only applies before that first measurement lands. */
 body,
 #root {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  height: 100dvh;
+  height: var(--app-h, 100dvh);
   overflow: hidden;
-}
-
-@media (display-mode: standalone) {
-  body,
-  #root {
-    height: 100vh;
-  }
 }
 
 body {
