@@ -28,6 +28,7 @@ node_modules/
 src/songs/generated/
 scripts
 imported-songs/
+dump/
 catalog.tsv
 songs.tsv
 ids.txt

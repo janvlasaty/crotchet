@@ -140,6 +140,11 @@ export interface Song {
   id: string;
   chordpro: string;
   index: SongIndex;
+  /**
+   * Where the row came from. Absent means it was seeded from the static set —
+   * only those rows are pruned when the bundled song set changes.
+   */
+  source?: 'import';
 }
 
 /** Setlist */

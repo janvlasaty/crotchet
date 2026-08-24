@@ -11,6 +11,13 @@ import { playClick } from '../lib/audio';
 /** Highest fret worth capoing on a guitar — past this the neck runs out. */
 export const CAPO_MAX = 7;
 
+/** Lyric size, as a multiplier of the base body size. */
+export const FONT_STEP = 0.1;
+export const FONT_MIN = 0.75;
+export const FONT_MAX = 2.3;
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 /** Tempo steppers: 2 BPM a tap, within what anyone would actually play. */
 export const TEMPO_STEP = 2;
 export const TEMPO_MIN = 40;
@@ -102,6 +109,26 @@ export const CapoControl: React.FC<{
     upDisabled={(capo ?? 0) >= CAPO_MAX}
     downLabel="Nižší pražec"
     upLabel="Vyšší pražec"
+  />
+);
+
+/** Lyric size, shown as a percentage; the sub-label resets it to 100%. */
+export const FontControl: React.FC<{
+  fontScale: number;
+  onFontScale: (scale: number) => void;
+}> = ({ fontScale, onFontScale }) => (
+  <Stepper
+    value={`${Math.round(fontScale * 100)}%`}
+    accent={fontScale !== 1}
+    sub={fontScale === 1 ? 'výchozí' : 'výchozí ✕'}
+    onSub={() => onFontScale(1)}
+    subDisabled={fontScale === 1}
+    onDown={() => onFontScale(Math.max(FONT_MIN, round2(fontScale - FONT_STEP)))}
+    onUp={() => onFontScale(Math.min(FONT_MAX, round2(fontScale + FONT_STEP)))}
+    downDisabled={fontScale <= FONT_MIN}
+    upDisabled={fontScale >= FONT_MAX}
+    downLabel="Menší písmo"
+    upLabel="Větší písmo"
   />
 );
 

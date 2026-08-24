@@ -7,17 +7,26 @@ import {
   saveSetlist,
   getRecentCache,
   saveRecentCache,
+  importSongs,
   type RecentEntry,
 } from '../lib/db';
 import { initSearch } from '../lib/search';
 import { applyUpdate } from '../lib/version';
+import { readSongPack } from '../lib/songpack';
 import { SearchFab, songCountLabel } from '../components/SearchFab';
-import { RefreshCw, Plus, Info } from 'lucide-react';
+import { RefreshCw, Plus, Ellipsis, Download } from 'lucide-react';
 import { UNKNOWN_ARTIST, indexLetter } from '../lib/artists';
 import type { Song, Setlist } from '../types';
 
 /** How long the outgoing cards take to fade before the next letter arrives. */
 const GRID_FADE_MS = 150;
+
+/** Progress of a song-pack import, or null when no import is in flight. */
+type ImportState =
+  | { phase: 'working'; done: number; total: number }
+  | { phase: 'done'; count: number }
+  | { phase: 'error'; message: string }
+  | null;
 
 export const HomeScreen: React.FC = () => {
   const navigate = useNavigate();
@@ -28,6 +37,8 @@ export const HomeScreen: React.FC = () => {
   const [newName, setNewName] = useState<string | null>(null);
   const [letter, setLetter] = useState<string | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [importState, setImportState] = useState<ImportState>(null);
+  const packInput = useRef<HTMLInputElement>(null);
   /** The letter the grid is currently showing, and whether it is on its way out. */
   const [shownLetter, setShownLetter] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -149,27 +160,51 @@ export const HomeScreen: React.FC = () => {
     setSetlists(await getAllSetlists());
   }, []);
 
-  useEffect(() => {
-    async function load() {
-      const allSongs = await getAllSongs();
-      setSongs(allSongs);
-      initSearch(allSongs);
+  const loadLibrary = useCallback(async () => {
+    const allSongs = await getAllSongs();
+    setSongs(allSongs);
+    initSearch(allSongs);
 
-      // Ten is what the two-row rail can show without endless sideways scrolling
-      const plays = await getRecentPlays(10);
-      const resolved: RecentEntry[] = [];
-      for (const p of plays) {
-        const song = allSongs.find(s => s.id === p.songId);
-        if (song) {
-          resolved.push({ id: song.id, title: song.index.title, artist: song.index.artist });
-        }
+    // Ten is what the two-row rail can show without endless sideways scrolling
+    const plays = await getRecentPlays(10);
+    const resolved: RecentEntry[] = [];
+    for (const p of plays) {
+      const song = allSongs.find(s => s.id === p.songId);
+      if (song) {
+        resolved.push({ id: song.id, title: song.index.title, artist: song.index.artist });
       }
-      setRecentSongs(resolved);
-      saveRecentCache(resolved);
-      await loadSetlists();
     }
-    load();
+    setRecentSongs(resolved);
+    saveRecentCache(resolved);
+    await loadSetlists();
   }, [loadSetlists]);
+
+  useEffect(() => {
+    loadLibrary();
+  }, [loadLibrary]);
+
+  /** Read the picked song pack and write it into the library. */
+  const handlePackPicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Clear it now, so picking the same file again still fires a change event
+    e.target.value = '';
+    if (!file) return;
+
+    setInfoOpen(false);
+    setImportState({ phase: 'working', done: 0, total: 0 });
+    try {
+      const pack = await readSongPack(file);
+      setImportState({ phase: 'working', done: 0, total: pack.length });
+      await importSongs(pack, (done, total) => setImportState({ phase: 'working', done, total }));
+      await loadLibrary();
+      setImportState({ phase: 'done', count: pack.length });
+    } catch (err) {
+      setImportState({
+        phase: 'error',
+        message: err instanceof Error ? err.message : 'Import se nezdařil.',
+      });
+    }
+  };
 
   const handleCreateSetlist = async () => {
     if (!newName?.trim()) return;
@@ -191,18 +226,35 @@ export const HomeScreen: React.FC = () => {
             aria-label="O aplikaci"
             aria-expanded={infoOpen}
           >
-            <Info size={18} strokeWidth={2.5} />
+            <Ellipsis size={20} strokeWidth={2.5} />
           </button>
 
-          {infoOpen && (
-            <div className="info-dropdown" role="menu">
-              <div className="info-version">Verze {__APP_VERSION__}</div>
-              <button className="info-action" onClick={() => applyUpdate()}>
-                <RefreshCw size={14} />
-                Obnovit aplikaci
-              </button>
-            </div>
-          )}
+          {/* Stays mounted so it can animate shut as well as open; while closed
+              it is clipped to the button's own square and made invisible. */}
+          <div className={`info-dropdown ${infoOpen ? 'open' : ''}`} role="menu">
+            <div className="info-version">Verze {__APP_VERSION__}</div>
+            <button className="info-action" onClick={() => applyUpdate()} tabIndex={infoOpen ? 0 : -1}>
+              <RefreshCw size={14} />
+              Obnovit aplikaci
+            </button>
+            <button
+              className="info-action"
+              onClick={() => packInput.current?.click()}
+              tabIndex={infoOpen ? 0 : -1}
+            >
+              <Download size={14} />
+              Importovat písně
+            </button>
+          </div>
+
+          {/* iOS offers Files/iCloud from here; .gz packs are unzipped in-app */}
+          <input
+            ref={packInput}
+            type="file"
+            accept=".json,.gz,application/json,application/gzip"
+            hidden
+            onChange={handlePackPicked}
+          />
         </div>
       </header>
 
@@ -214,7 +266,7 @@ export const HomeScreen: React.FC = () => {
           <section className="home-section">
             <h2>Naposledy hrané</h2>
             {/* Two rows scrolling sideways, same rail as the play screen */}
-            <div className="rec-rail">
+            <div className="card-rail rec-rail">
               {recentSongs.map(r => (
                 <div key={r.id} className="song-card" onClick={() => navigate(`/play/${r.id}`)}>
                   <div className="song-card-title">{r.title}</div>
@@ -228,7 +280,12 @@ export const HomeScreen: React.FC = () => {
         <section className="home-section">
           <h2>Setlisty</h2>
 
-          <div className="song-grid">
+          {/* A rail, like the recent songs above: a bounded set, one card width.
+              Second row only once a single row would run long. */}
+          <div
+            className="card-rail"
+            style={{ '--rail-rows': setlists.length + 1 > 5 ? 2 : 1 } as React.CSSProperties}
+          >
             {setlists.map(sl => (
               <div
                 key={sl.id}
@@ -314,6 +371,60 @@ export const HomeScreen: React.FC = () => {
                 disabled={!newName.trim()}
               >
                 Vytvořit
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {importState && (
+        <>
+          {/* No dismiss-on-tap while writing — a half-finished import would
+              leave the grid disagreeing with the database. */}
+          <div
+            className="modal-scrim"
+            onClick={() => importState.phase !== 'working' && setImportState(null)}
+          />
+          <div className="modal-card" role="dialog" aria-label="Import písní">
+            <h3>Import písní</h3>
+
+            {importState.phase === 'working' && (
+              <>
+                <p className="import-status" aria-live="polite">
+                  {importState.total
+                    ? `Ukládám ${importState.done} z ${importState.total} písní…`
+                    : 'Načítám balíček…'}
+                </p>
+                <div className="import-bar">
+                  <div
+                    className="import-bar-fill"
+                    style={{
+                      width: importState.total
+                        ? `${Math.round((importState.done / importState.total) * 100)}%`
+                        : '0%',
+                    }}
+                  />
+                </div>
+              </>
+            )}
+
+            {importState.phase === 'done' && (
+              <p className="import-status">
+                Hotovo — {songCountLabel(importState.count)} v knihovně.
+              </p>
+            )}
+
+            {importState.phase === 'error' && (
+              <p className="import-status error">{importState.message}</p>
+            )}
+
+            <div className="modal-actions">
+              <button
+                className="modal-btn primary"
+                onClick={() => setImportState(null)}
+                disabled={importState.phase === 'working'}
+              >
+                {importState.phase === 'working' ? 'Probíhá…' : 'Zavřít'}
               </button>
             </div>
           </div>

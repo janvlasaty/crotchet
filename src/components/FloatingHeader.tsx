@@ -24,8 +24,8 @@ export function useHeaderReveal() {
 interface FloatingHeaderProps {
   /** Compact title, revealed once the hero has scrolled away */
   title: string;
-  /** Small muted line under the title (e.g. the artist) */
-  subtitle?: string;
+  /** Small muted line under the title (e.g. the artist, or the song's chords) */
+  subtitle?: React.ReactNode;
   /** Trailing detail next to the title, accent-coloured (e.g. the current key) */
   accessory?: React.ReactNode;
   /** Glyph for the circular button on the left */

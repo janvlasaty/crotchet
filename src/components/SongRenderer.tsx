@@ -111,7 +111,17 @@ const SectionBlock: React.FC<SectionBlockProps> = ({
   chordsVisible,
   chordDefs,
 }) => {
-  const sectionClass = `section section-${section.type}${section.recalled ? ' section-recalled' : ''}`;
+  // A repeat group's rule hangs to the left of the lines, so the section holds
+  // the gutter for it — that way its own lines are not the only indented ones.
+  const hasRepeatGroup = section.lines.some(l => l.marker?.kind === 'repeat_start');
+  const sectionClass = [
+    'section',
+    `section-${section.type}`,
+    section.recalled ? 'section-recalled' : '',
+    hasRepeatGroup ? 'section-repeats' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   // Tab blocks are verbatim: no chord parsing, no reflow, spacing preserved.
   if (section.type === 'tab') {
@@ -189,7 +199,15 @@ function renderLines(
     sink().push(
       <div key={li} className="song-line">
         {line.segments.map((seg, si) => (
-          <span key={si} className="segment">
+          <span
+            key={si}
+            /* No word under the chord — an intro row, or a run of changes at the
+               end of a line — so the chord has nothing to space it from the one
+               after it and the gap has to come from the segment itself. */
+            className={`segment ${
+              !seg.text.trim() && (seg.chord || seg.annotation !== undefined) ? 'segment-bare' : ''
+            }`}
+          >
             {seg.annotation !== undefined ? (
               <span className="chord-slot annotation-slot">{seg.annotation}</span>
             ) : seg.chord && chordsVisible ? (

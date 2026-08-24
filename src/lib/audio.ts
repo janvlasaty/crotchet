@@ -29,7 +29,59 @@ export function playClick(time?: number): void {
   osc.stop(t + 0.05);
 }
 
-/** Get frequencies for a chord (simple major/minor triads) */
+/**
+ * Semitones above the root that a chord suffix asks for, low to high.
+ *
+ * Enough of chord naming for the reference tone to sound like what is written:
+ * the third the quality wants, or the suspension standing in for it; the fifth
+ * where the quality moves it; and the sixth or seventh that makes a seventh
+ * chord four notes instead of three. Anything past that (the 9ths of a 9/11/13,
+ * altered colours) is left off — this is a pitch reference, not a voicing.
+ */
+function chordIntervals(rest: string): number[] {
+  // A slash bass names the bottom note, not the chord's own colour
+  const quality = rest.split('/')[0].replace(/[()\s]/g, '');
+  const q = quality.toLowerCase();
+
+  // Case matters: `m` is minor, `maj` is not
+  const minor = /^(m|min)(?!aj)/.test(quality);
+  const halfDim = q.startsWith('ø') || /^m(in)?7?[b-]5/.test(q);
+  const dim = q.startsWith('dim') || q.startsWith('°') || q.startsWith('o') || halfDim;
+  const aug = q.startsWith('aug') || q.startsWith('+');
+
+  // The suspension replaces the third — that is what "suspended" means
+  const third = /sus2/.test(q) ? 2
+    : /sus(4|$)/.test(q) ? 5
+    : q === '5' ? null                       // power chord: root and fifth alone
+    : minor || dim ? 3
+    : 4;
+
+  const fifth = dim || /[b-]5/.test(q) ? 6
+    : aug || /[#+]5/.test(q) ? 8
+    : 7;
+
+  // The fourth note, when the name carries one
+  const seventh = /^(dim|°)7|^o7/.test(q) ? 9   // fully diminished: the 6th
+    : halfDim ? 10
+    // maj7, Δ7 and the capital-M shorthand all mean the major seventh
+    : /^(maj|ma|Δ)(7|9|11|13)/.test(q) || /(maj|Δ|M)7/.test(quality) ? 11
+    : /add9/.test(q) ? 14
+    : /6/.test(q) ? 9
+    : /7|9|11|13/.test(q) ? 10
+    : null;
+
+  return [0, third, fifth, seventh].filter((n): n is number => n !== null);
+}
+
+/**
+ * A chord as a rising arpeggio.
+ *
+ * The intervals are counted from the root's own pitch instead of being folded
+ * back into its octave with `% 12`. Folding put every note that crosses B→C
+ * *below* the root — A major sounded A3 C#3 E3, D major D3 F#3 A3 but B minor
+ * B3 D3 F#3 — so the reference tone ran downwards for a third of the keys. The
+ * sort then guarantees the rise whatever intervals the suffix asks for.
+ */
 function chordToFrequencies(chord: string): number[] {
   const parsed = parseChordRoot(chord);
   if (!parsed) return [440]; // fallback A4
@@ -37,15 +89,9 @@ function chordToFrequencies(chord: string): number[] {
   const rootIdx = noteToIndex(parsed.root);
   if (rootIdx === -1) return [440];
 
-  const isMinor = parsed.rest.startsWith('m') && !parsed.rest.startsWith('maj');
-  const third = isMinor ? 3 : 4;
-  const fifth = 7;
-
-  return [
-    noteFrequency(rootIdx, 3),
-    noteFrequency((rootIdx + third) % 12, 3),
-    noteFrequency((rootIdx + fifth) % 12, 3),
-  ];
+  return chordIntervals(parsed.rest)
+    .map(semitones => noteFrequency(rootIdx + semitones, 3))
+    .sort((a, b) => a - b);
 }
 
 /** Play a reference tone (arpeggio of the first chord) */

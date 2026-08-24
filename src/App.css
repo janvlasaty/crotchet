@@ -39,6 +39,9 @@
   /* On-screen keyboard height, kept current by src/lib/keyboardInset.ts */
   --kb: 0px;
 
+  /* Left gutter a section holds open for a repeat group's rule */
+  --repeat-gutter: 12px;
+
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   /* Serif display face for the app name */
   --font-serif: 'Playfair Display', 'Iowan Old Style', Georgia, serif;
@@ -78,10 +81,10 @@ body {
 .search-fab,
 .play-controls-bar,
 .back-btn-floating,
+.top-actions,
 .floating-title,
 .home-header,
 .screen-header,
-.control-btn,
 .scroll-control,
 .control-circle {
   touch-action: manipulation;
@@ -375,6 +378,33 @@ body {
   border-color: var(--accent);
 }
 
+/* Song-pack import: one status line, one bar */
+.import-status {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.import-status.error {
+  color: var(--text);
+}
+
+.import-bar {
+  margin-top: 12px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.import-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  /* Chunked writes land in steps; the ease smooths them into a sweep */
+  transition: width 160ms ease;
+}
+
 .modal-actions {
   display: flex;
   gap: 8px;
@@ -439,6 +469,8 @@ body {
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
+  /* A row a drag displaces slides its one place rather than blinking there */
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /* Section heading that navigates — inherits the h3 look it sits in */
@@ -459,6 +491,13 @@ body {
 
 .rec-head-title:active {
   color: var(--accent);
+}
+
+/* What the heading actually leads to — the artist, and the chevron that says so
+   — reads at full strength, while the "Další od" before it stays a label. */
+.rec-head-name {
+  gap: 2px;
+  color: var(--text);
 }
 
 /* Up-next rows reveal in the same cascade as the recommendation cards */
@@ -501,6 +540,32 @@ body {
   border-radius: 12px;
   border-bottom-color: transparent;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  /* Lifted over its neighbours, and tracking the finger 1:1 — any easing here
+     would be lag between the row and the hand holding it. */
+  position: relative;
+  z-index: 2;
+  transition: none;
+}
+
+/* Let go: the one moment the picked row is animated, into its new slot */
+.setlist-row.dragging.settling {
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/*
+ * The frame the new order lands in. Each row's transform drops to zero at the
+ * same moment the rewrite moves it a place — equal and opposite, and invisible
+ * only if neither is animated.
+ */
+.setlist-rows.reordering .setlist-row {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setlist-row,
+  .setlist-row.dragging.settling {
+    transition-duration: 1ms;
+  }
 }
 
 .setlist-order {
@@ -590,11 +655,12 @@ body {
   color: var(--text-muted);
 }
 
-/* Floating search button — bottom left; expands into a pill with the input */
+/* Floating search button — bottom right; expands leftwards into a pill with
+   the input, so the trigger stays under the thumb */
 .search-fab {
   position: fixed;
   bottom: calc(16px + var(--kb));
-  left: 16px;
+  right: 16px;
   box-sizing: border-box;
   width: 56px;
   height: 56px;
@@ -604,6 +670,9 @@ body {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   color: #fff;
   display: flex;
+  /* Reversed so the lens stays pinned in the corner it was tapped in and the
+     field unrolls leftwards, rather than the icon sliding off the edge. */
+  flex-direction: row-reverse;
   align-items: center;
   overflow: hidden;
   z-index: 42;
@@ -616,10 +685,11 @@ body {
     border-color 220ms ease;
 }
 
-/* Play screen: sit exactly where the play button was, so one replaces the other */
+/* Play screen: sit exactly where the play button was, so one replaces the other.
+   Anchored right, so opening it grows the pill leftwards across the bar. */
 .search-fab.in-control-bar {
-  bottom: calc(8px + var(--kb));
-  left: 12px;
+  bottom: calc(12px + var(--kb));
+  right: 12px;
 }
 
 .search-fab.in-control-bar.open {
@@ -958,32 +1028,221 @@ body {
   position: relative;
 }
 
-/* Floating back button - circle */
+/* Floating back button - same pill as the autoscroll control in the opposite
+   corner: identical 56px box, fill, border, blur and shadow. */
 .back-btn-floating {
   position: fixed;
   top: 12px;
   left: 12px;
   width: 56px;
   height: 56px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.95);
-  border: none;
-  color: #000;
+  border-radius: 28px;
+  background: rgba(28, 28, 30, 0.9);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 30;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-@media (prefers-color-scheme: dark) {
-  .back-btn-floating {
-    background: rgba(30, 30, 30, 0.95);
-    color: #fff;
+/*
+ * Four actions in one pill, top right: same 56px box, fill, blur and shadow as
+ * the close button opposite and the play pill below, on the same 12px inset, so
+ * all three corners read as one layer.
+ */
+.top-actions {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  /* No padding in either state: the ellipsis is the same width open or folded,
+     so nothing shifts it sideways as the dials fold away. The rounded ends clip
+     the end taps instead. */
+  padding: 0;
+  height: 56px;
+  border-radius: 28px;
+  background: rgba(28, 28, 30, 0.9);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  /* The pill never changes shape: the panel grows out of it and covers it, and
+     is uncovered again on the way back — see .tool-panel. */
+  /* The dials fold to zero width, so nothing may spill past the rounded edge.
+     The pill is auto-width, so it tracks the fold on its own — no width
+     animation of its own is possible or needed. */
+  overflow: hidden;
+}
+
+/*
+ * Folded down to the same 56px circle as the close button opposite. Width is
+ * the ellipsis's 54px plus the 1px borders; only its height has to grow, and
+ * that is centred, so the glyph does not move at all as the pill closes.
+ */
+.top-actions.collapsed .top-action-more {
+  height: 54px;
+  border-radius: 27px;
+}
+
+/* No gaps between the taps — every pixel of the pill belongs to an action */
+.top-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Wide enough that the four glyphs read as separate controls, not a strip */
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 24px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex: none;
+  transition: color 0.15s, background 0.15s,
+    width 260ms cubic-bezier(0.32, 0.72, 0, 1),
+    height 260ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 180ms ease;
+}
+
+/*
+ * Scrolled into the page: the three dials fold shut and the ellipsis stays,
+ * which is also where they all live (the settings panel) while folded.
+ */
+.top-actions.collapsed .top-action:not(.top-action-more) {
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
+ * The other way round, for a pill whose actions are its whole content: while
+ * they are all reachable there is nothing for an ellipsis to stand for, so it
+ * is the one folded away, and it grows in as they fold out. One morph, 146px
+ * of three taps to the 56px circle.
+ */
+.top-actions.more-on-fold:not(.collapsed) .top-action-more {
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Something is still running behind the fold — a dot says so */
+.top-actions.collapsed.has-running .top-action-more::after {
+  content: '';
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: top-action-tick 1s ease-in-out infinite;
+}
+
+/* One width in both states — see the fold note above */
+.top-action-more {
+  position: relative;
+  width: 54px;
+}
+
+/* Deleting the whole setlist says so before it is tapped */
+.top-action.danger {
+  color: var(--danger);
+}
+
+.top-action.danger:active:not(:disabled) {
+  background: rgba(255, 107, 107, 0.16);
+  color: var(--danger);
+}
+
+.top-action.active {
+  color: #fff;
+}
+
+/*
+ * Tapped: the panel takes over, growing out of this exact shape. The pill itself
+ * holds still underneath — covered from the panel's first frame, since that frame
+ * is the pill's own box in the pill's own fill.
+ */
+.top-actions.morphed {
+  pointer-events: none;
+}
+
+/* The others leave first, so for a moment only the hit icon is lit and alone */
+.top-actions.morphed .top-action:not(.open) {
+  opacity: 0;
+  transition: opacity 90ms ease;
+}
+
+/* The hit itself: held bright through the gather, until the panel covers it */
+.top-action.open {
+  color: var(--accent);
+  background: var(--accent-dim);
+  transition: color 60ms ease, background 60ms ease;
+}
+
+.top-action:disabled {
+  color: #4a4a4a;
+  cursor: default;
+}
+
+.top-action:active:not(:disabled) {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* Ticking metronome: the pill's only running state, so it says so in accent */
+.top-action.ticking {
+  color: var(--accent);
+  animation: top-action-tick 1s ease-in-out infinite;
+}
+
+@keyframes top-action-tick {
+  0%,
+  100% {
+    opacity: 1;
   }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/*
+ * The play screen's top edge carries the pill as well as the close button, so
+ * the revealed title takes the band between them instead of the window centre.
+ */
+.play-screen .floating-title,
+.setlist-detail-screen .floating-title {
+  left: 76px;
+  /* Clears the open pill: 12px inset + four 48px taps + 8px padding + a gap */
+  right: 220px;
+  max-width: none;
+  justify-content: center;
+  transform: translateY(-6px);
+  transition: opacity 200ms ease, transform 200ms ease, right 260ms ease;
+}
+
+/* Folded pill gives the width back — the title is centred again while reading */
+.play-screen.tools-collapsed .floating-title,
+.setlist-detail-screen.tools-collapsed .floating-title {
+  right: 76px;
+}
+
+.play-screen .floating-title.visible,
+.setlist-detail-screen .floating-title.visible {
+  transform: translateY(0);
 }
 
 /* Top scrim: fully opaque behind the status bar so nothing scrolls under the
@@ -1061,6 +1320,14 @@ body {
   max-width: 100%;
 }
 
+/* Under the compact title: every shape in the song, in first-played order.
+   Chord-coloured and tabular so it reads as chords, not as a sentence. */
+.floating-chords {
+  color: var(--text-chord);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
 .floating-title-accessory {
   font-size: 15px;
   font-weight: 600;
@@ -1104,27 +1371,6 @@ body {
   color: var(--text-muted);
 }
 
-/*
- * Dots separate the chips only. The artist is set off by the row gap instead —
- * a dot there would lead the second line once the group wraps.
- */
-.meta-chips > * + *::before {
-  content: '·';
-  margin-right: 10px;
-  color: var(--text-muted);
-}
-
-/*
- * The chips are one indivisible unit: when the artist name leaves too little
- * room, the whole group drops to the next line rather than splitting mid-way.
- */
-.meta-chips {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 10px;
-}
-
 .hero-meta-lead {
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1155,160 +1401,6 @@ body {
 .hero-meta-accent {
   font-weight: 600;
   color: var(--accent);
-}
-
-/* Tappable meta chips: key, capo, tempo, reference tone */
-.meta-chip {
-  padding: 2px 0;
-  border: none;
-  background: none;
-  font: inherit;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  letter-spacing: 0.04em;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  transition: color 0.15s;
-}
-
-/* Note glyph needs breathing room from the separator dot, text does not */
-.meta-chip-icon {
-  gap: 6px;
-}
-
-/* Destructive chip */
-.meta-chip.danger {
-  color: var(--danger);
-}
-
-/* Metronome running: the chip stays lit even with every panel closed */
-.meta-chip.ticking {
-  color: var(--accent);
-}
-
-/* The panel's arrow already points at the open chip; just brighten it */
-.meta-chip.open {
-  color: var(--text);
-}
-
-.meta-chip:active {
-  color: var(--text);
-}
-
-.meta-chip:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-/* Capo with nothing set reads as struck out rather than missing */
-.meta-off {
-  text-decoration: line-through;
-  text-decoration-thickness: 1px;
-  opacity: 0.7;
-}
-
-.meta-dismiss {
-  position: fixed;
-  inset: 0;
-  /* Over the header scrim (29) and its buttons (30) */
-  z-index: 31;
-}
-
-/* The row is the anchor; the panel floats in the empty space above it */
-.hero-meta-wrap {
-  position: relative;
-}
-
-.meta-popover {
-  position: absolute;
-  bottom: calc(100% + 12px);
-  /* left and --arrow are measured on open; the height is deliberately fixed so
-     switching chips or changing a value never resizes the panel */
-  width: 176px;
-  z-index: 32;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  padding: 8px;
-  border-radius: 20px;
-  background: rgba(38, 38, 43, 0.96);
-  -webkit-backdrop-filter: blur(24px) saturate(1.3);
-  backdrop-filter: blur(24px) saturate(1.3);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow:
-    0 16px 44px rgba(0, 0, 0, 0.7),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  animation: meta-popover-in 200ms cubic-bezier(0.32, 1.25, 0.6, 1);
-  transform-origin: bottom center;
-}
-
-/* Kill the meta row's separator dot, which would otherwise land in here */
-.meta-popover::before {
-  content: none;
-}
-
-/* Arrow aimed at the chip that opened the panel */
-.meta-popover::after {
-  content: '';
-  position: absolute;
-  bottom: -6px;
-  left: var(--arrow, 50%);
-  width: 11px;
-  height: 11px;
-  margin-left: -6px;
-  background: rgba(38, 38, 43, 0.96);
-  border-right: 1px solid rgba(255, 255, 255, 0.16);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
-  border-bottom-right-radius: 3px;
-  transform: rotate(45deg);
-}
-
-/* Too little headroom above the row: hang below it, arrow flipped up */
-.meta-popover.drop {
-  bottom: auto;
-  top: calc(100% + 12px);
-  transform-origin: top center;
-}
-
-.meta-popover.drop::after {
-  bottom: auto;
-  top: -6px;
-  border-right: none;
-  border-bottom: none;
-  border-left: 1px solid rgba(255, 255, 255, 0.16);
-  border-top: 1px solid rgba(255, 255, 255, 0.16);
-  border-bottom-right-radius: 0;
-  border-top-left-radius: 3px;
-}
-
-@keyframes meta-popover-drop-in {
-  from {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.meta-popover.drop {
-  animation-name: meta-popover-drop-in;
-}
-
-@keyframes meta-popover-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 /*
@@ -1483,6 +1575,20 @@ body {
   max-width: 100%;
   overflow-x: hidden;
   overflow-wrap: break-word;
+  /* A ± tap, and the snap at the end of a pinch, ease into the new size */
+  transition: font-size 180ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Mid-pinch the size is already following the fingers — easing it would only
+   add lag, and animating a reflow every frame is work for nothing. */
+.play-content.pinching .song-content {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .song-content {
+    transition-duration: 1ms;
+  }
 }
 
 .section {
@@ -1518,6 +1624,12 @@ body {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+/* Lyricless chord: keeps "Gm7 C7 Gm7 C7" from reading as one long word. The
+   space is on the right, so the first chord still starts on the line's margin. */
+.segment-bare {
+  margin-right: 0.55em;
 }
 
 .chord-slot {
@@ -1625,26 +1737,29 @@ body {
   stroke-width: 0.9;
 }
 
-/* Play controls — floating bar: circle left, pill right */
+/* Play controls — floating bar, bottom right. No height of its own, so a
+   control that grows grows upward from the bar's fixed bottom edge. */
 .play-controls-bar {
   position: fixed;
-  bottom: 8px;
+  bottom: 12px;
   left: 12px;
   right: 12px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  justify-content: flex-end;
+  align-items: flex-end;
   z-index: 20;
   pointer-events: none;
 }
 
 /*
- * Primary action on the play screen: an accent circle that expands into a dark
- * pill on play, revealing the turtle/rabbit pace controls — same morph as the
- * search FAB on the home screen.
+ * Primary action on the play screen: a circle in the bottom-right corner that
+ * grows upward into a tall pill on play, stacking the turtle/rabbit pace
+ * controls above it. `column-reverse` anchors the play button itself to the
+ * bottom, so the pill unrolls over the lyrics and the tap target never moves.
  */
 .scroll-control {
   display: flex;
+  flex-direction: column-reverse;
   align-items: center;
   box-sizing: border-box;
   width: 56px;
@@ -1658,7 +1773,7 @@ body {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   pointer-events: auto;
   transition:
-    width 340ms cubic-bezier(0.32, 1.28, 0.6, 1),
+    height 340ms cubic-bezier(0.32, 1.28, 0.6, 1),
     transform 260ms cubic-bezier(0.32, 1.28, 0.6, 1),
     opacity 200ms ease,
     background 220ms ease,
@@ -1681,7 +1796,7 @@ body {
 }
 
 .scroll-control.open {
-  width: 168px;
+  height: 168px;
   background: rgba(28, 28, 30, 0.9);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
@@ -1758,87 +1873,201 @@ body {
   color: #fff;
 }
 
-.control-pill-right {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  background: rgba(28, 28, 30, 0.85);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  border-radius: 28px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-  pointer-events: auto;
-}
-
-.control-btn {
-  width: 56px;
-  height: 56px;
-  padding: 0;
-  background: none;
-  border: none;
-  /* White like the play glyph; accent is reserved for the active states */
-  color: #fff;
-  font-size: 22px;
-  cursor: pointer;
-  flex-shrink: 0;
-  border-radius: 50%;
-  transition: color 0.15s, background 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Secondary controls stay quiet */
-.control-btn.muted {
-  color: var(--text-muted);
-}
-
-.control-btn.active {
-  color: var(--accent);
-  background: rgba(79, 195, 247, 0.12);
-}
-
-.control-btn:active {
-  background: var(--accent-dim);
-}
-
-/* At the font-size limits */
-.control-btn:disabled {
-  opacity: 0.35;
-  pointer-events: none;
-}
-
-/* Preparation panel — dropdown from bottom right, dismissed by tapping away */
-.prep-dismiss {
+/* Anything outside the open panel folds it shut */
+.tool-dismiss {
   position: fixed;
   inset: 0;
-  z-index: 24;
+  /* Over the header scrim and its buttons — the pill is hidden while open */
+  z-index: 30;
 }
 
-.prep-panel-dropdown {
+/*
+ * The pill's one panel, for all four tools — the pill morphing into a box rather
+ * than a menu appearing next to it. It is pinned to the pill's own corner, laid
+ * out at full size from the start, and revealed by an animated `clip-path`, so
+ * text never reflows mid-morph and the height can stay `auto`. The reveal starts
+ * as exactly the tapped icon's box, which is why the icons can simply go: the
+ * first frame of the panel is the shape they were sitting in.
+ */
+.tool-panel {
   position: fixed;
-  bottom: 76px;
+  /* The pill's own corner — the panel replaces it rather than hanging below it */
+  top: 12px;
   right: 12px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 16px 20px;
-  z-index: 25;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  min-width: 240px;
-  max-width: 300px;
-  max-height: calc(100vh - 140px);
+  min-height: 56px;
+  /* Above the dismiss layer, so taps inside the panel reach its controls */
+  z-index: 31;
+  /* As narrow as the popovers this replaced — the controls are rows, not text */
+  min-width: 212px;
+  max-width: min(260px, calc(100vw - 24px));
+  max-height: calc(100vh - 88px);
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  padding: 14px 18px;
+  border-radius: 24px;
+  /* The pill's own fill, blur and border: the two surfaces are one surface */
+  background: rgba(28, 28, 30, 0.94);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  backdrop-filter: blur(20px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 16px 44px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  visibility: hidden;
+  opacity: 0;
+  /* Exactly the pill on screen: same corner, same size, same 28px radius */
+  clip-path: inset(
+    0 0 calc(100% - var(--morph-height, 56px)) calc(100% - var(--morph-width, 200px)) round 28px
+  );
+  /* The bounce lives here, where an overshoot can actually render — a clip-path
+     inset cannot go below 0, so a springy curve on it would only ever flatten. */
+  transform: scale(0.985);
+  transform-origin: 100% 0;
+  transition:
+    clip-path 200ms cubic-bezier(0.4, 0, 0.9, 0.5),
+    transform 200ms ease,
+    opacity 120ms ease 80ms,
+    visibility 0s linear 200ms;
+}
+
+.tool-panel.open {
+  visibility: visible;
+  opacity: 1;
+  /* Grows out to full size — never smaller than the pill at any frame */
+  clip-path: inset(0 0 0 0 round 24px);
+  transform: scale(1);
+  transition:
+    /* Held back a beat, so the lit icon is seen before the box covers it */
+    clip-path 400ms cubic-bezier(0.16, 1, 0.3, 1) 110ms,
+    transform 520ms cubic-bezier(0.2, 1.5, 0.4, 1) 110ms,
+    opacity 1ms linear 110ms,
+    visibility 0s;
+}
+
+/*
+ * A panel whose content is a list of commands rather than dials: the same icons
+ * the pill shows, each with the word for what it does, since a folded pill has
+ * no room to say it.
+ */
+.tool-menu {
+  display: flex;
+  flex-direction: column;
+  /* Out to the panel's padding, so a row lights up edge to edge */
+  margin: -4px -8px;
+}
+
+.tool-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 10px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tool-menu-item svg {
+  flex: none;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.tool-menu-item:active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.tool-menu-item:active svg {
+  color: var(--accent);
+}
+
+/* Irreversible: red before the tap, not only in the confirmation after it */
+.tool-menu-item.danger,
+.tool-menu-item.danger svg {
+  color: var(--danger);
+}
+
+.tool-menu-item.danger:active {
+  background: rgba(255, 107, 107, 0.16);
+}
+
+/* Content trails the surface, so the panel reads as expanding, not sliding */
+.tool-panel > * {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+/* Content lands after the box has most of its size — never during the gather */
+.tool-panel.open > * {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 200ms ease 260ms,
+    transform 300ms cubic-bezier(0.22, 1.16, 0.36, 1) 260ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-panel,
+  .tool-panel.open,
+  .tool-panel > *,
+  .tool-panel.open > *,
+  .top-actions.morphed .top-action:not(.open) {
+    transition-duration: 1ms;
+    transition-delay: 0s;
+  }
+}
+
+/* Every chord in the song, sounding pitch, tap to hear it */
+.tone-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.tone-key {
+  min-width: 46px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-chord);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tone-key:active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .prep-section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
+  /* The label heads its control from a distance, so the two read as a pair
+     rather than as one block of text touching a row of buttons */
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.prep-section:last-child {
+  margin-bottom: 4px;
 }
 
 .prep-section label {
@@ -1847,6 +2076,7 @@ body {
   letter-spacing: 1px;
   color: var(--text-muted);
   display: block;
+  text-align: center;
 }
 
 .prep-row {
@@ -1893,46 +2123,59 @@ body {
 }
 
 /* Three-way split button */
-.segmented {
-  display: flex;
+/*
+ * Select in the tool panels. Native control, custom skin: the chevron is an
+ * inline SVG background rather than an overlaid element, so the whole box stays
+ * one tap target and iOS still opens its own picker.
+ */
+.ui-select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 38px 0 14px;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.segmented button {
-  flex: 1;
-  min-height: 40px;
-  padding: 0 10px;
-  border: none;
-  background: var(--bg-surface);
-  color: var(--text-muted);
-  font-size: 13px;
+  border-radius: 12px;
+  background-color: var(--bg-surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
   font-weight: 600;
+  text-align: center;
+  /* Centre the value, not the whole box: the chevron owns the right edge */
+  text-align-last: center;
   cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
+  appearance: none;
+  -webkit-appearance: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s, background-color 0.15s;
 }
 
-.segmented button + button {
-  border-left: 1px solid var(--border);
+.ui-select:active,
+.ui-select:focus-visible {
+  border-color: var(--accent);
+  outline: none;
 }
 
-.segmented button.active {
-  background: var(--accent-dim);
-  color: var(--accent);
+/* The menu itself is the platform's; only its rows can be dressed */
+.ui-select option {
+  background: var(--bg-elevated);
+  color: var(--text);
 }
 
-/* Chord colour palette */
 .swatch-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  justify-content: center;
+  gap: 10px;
 }
 
 .swatch {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   border-radius: 50%;
   border: 2px solid transparent;
@@ -2183,11 +2426,15 @@ body {
   color: var(--danger);
 }
 
-/* Two rows of cards, scrolling sideways; bleeds into the content padding */
-.rec-rail {
+/*
+ * A bounded set of cards, scrolling sideways; bleeds into the content padding.
+ * Shared by every rail so rail cards are one width everywhere — the vertical
+ * .song-grid is the only place cards stretch, because that list is unbounded.
+ */
+.card-rail {
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: repeat(2, auto);
+  grid-template-rows: repeat(var(--rail-rows, 2), auto);
   grid-auto-columns: 150px;
   gap: 10px;
   overflow-x: auto;
@@ -2201,7 +2448,7 @@ body {
   margin: 0 -20px 0 -20px;
 }
 
-.rec-rail .song-card {
+.card-rail .song-card {
   scroll-snap-align: start;
 }
 
@@ -2211,24 +2458,46 @@ body {
   flex: none;
 }
 
+/* Sits above the panel so it stays tappable to close, and so the panel appears
+   to unfold from underneath it. Its 28px radius is half its 56px box — the same
+   circle as every other round button in the app — which is also where the
+   panel's reveal starts, so the two shapes coincide exactly at the first frame
+   of the morph. */
 .info-btn {
+  position: relative;
+  z-index: 17;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--bg-surface);
   color: var(--text-muted);
   cursor: pointer;
+  transition:
+    background 200ms ease,
+    border-color 200ms ease,
+    color 160ms ease;
 }
 
-.info-btn:active,
-.info-btn.active {
+.info-btn:active {
   background: var(--accent-dim);
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* Open: the button is absorbed by the panel growing out of it, so it fades out
+   rather than sitting on top as a visible circle. Dismissal is the backdrop's
+   job from here — the whole screen outside the panel closes it. */
+.info-btn.active {
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    background 200ms ease,
+    border-color 200ms ease;
 }
 
 .info-backdrop {
@@ -2237,33 +2506,75 @@ body {
   z-index: 15;
 }
 
+/* Grows out of the button instead of appearing beneath it as a separate card.
+   The panel is laid out at full size from the start, with its top-right corner
+   on the button's, and an animated `clip-path` reveals it — so the button's
+   round 56px square appears to stretch into the finished rectangle. Clipping
+   rather than animating width/height keeps the text from reflowing mid-morph
+   and never needs a measured height, so the content can stay `auto`. */
 .info-dropdown {
   position: absolute;
   z-index: 16;
-  top: calc(100% + 8px);
+  top: 0;
   right: 0;
-  min-width: 190px;
-  padding: 6px;
-  border-radius: 14px;
+  min-width: 220px;
+  /* Enough inset that the fatter 28px corners don't bite into the rows */
+  padding: 8px;
+  border-radius: 28px;
   background: var(--bg-elevated);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
-  animation: info-dropdown-in 160ms cubic-bezier(0.32, 1.2, 0.6, 1) both;
+
+  visibility: hidden;
+  opacity: 0;
+  /* Only the button's own square is showing */
+  clip-path: inset(0 0 calc(100% - 56px) calc(100% - 56px) round 28px);
+  transition:
+    clip-path 260ms cubic-bezier(0.4, 0, 0.9, 0.5),
+    opacity 160ms ease 60ms,
+    visibility 0s linear 260ms;
 }
 
-@keyframes info-dropdown-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+.info-dropdown.open {
+  visibility: visible;
+  opacity: 1;
+  clip-path: inset(0 0 0 0 round 28px);
+  transition:
+    /* Overshoots slightly on the way out, the way an iOS menu unfurls */
+    clip-path 420ms cubic-bezier(0.22, 1.16, 0.36, 1),
+    opacity 120ms ease,
+    visibility 0s;
+}
+
+/* Content trails the surface so the panel reads as expanding, not sliding */
+.info-dropdown > * {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.info-dropdown.open > * {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 200ms ease 130ms,
+    transform 260ms cubic-bezier(0.22, 1.16, 0.36, 1) 130ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .info-dropdown,
+  .info-dropdown.open,
+  .info-dropdown > *,
+  .info-dropdown.open > * {
+    transition-duration: 1ms;
+    transition-delay: 0s;
   }
 }
 
 .info-version {
-  padding: 8px 12px 10px;
+  padding: 10px 14px;
   font-size: 13px;
   color: var(--text-muted);
 }
@@ -2289,17 +2600,79 @@ body {
 }
 
 /* Autoscroll position indicator */
-.scroll-indicator {
+/*
+ * Autoscroll route, down the right edge: a dot per step it will take, and an
+ * accent dot travelling the same line. Clear of the corner pills, which start
+ * 12px in, so nothing has to move out of the way.
+ */
+/* The strip is inset to the middle 70% of the screen: the ends of the route
+   would otherwise run into the floating header and the control bar, and the dots
+   there read as part of those controls rather than as the song's position. */
+.scroll-ladder {
   position: fixed;
-  right: 4px;
+  right: 2px;
+  top: 15%;
+  bottom: 15%;
   width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  opacity: 0.5;
   z-index: 15;
   pointer-events: none;
-  transition: top 0.1s linear;
+  /* Autoscroll over: the route fades off the edge rather than blinking out */
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity 320ms ease, transform 320ms ease;
+}
+
+.scroll-ladder.visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Both the stops and the cursor are placed by percentage of this strip and
+   pulled back by half themselves, so they share one line and one origin. */
+.scroll-dot,
+.scroll-cursor {
+  position: absolute;
+  left: 50%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.scroll-dot {
+  width: 4px;
+  height: 4px;
+  background: var(--text-muted);
+  opacity: 0.45;
+  transition: opacity 180ms ease, background 180ms ease;
+}
+
+/* The step the song has arrived at */
+.scroll-dot.reached {
+  background: var(--accent);
+  opacity: 0.9;
+}
+
+.scroll-cursor {
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(79, 195, 247, 0.6);
+  /*
+   * Linear over one whole autoscroll interval, set per step from the tick: the
+   * dot crawls the gap at a steady rate instead of hopping when the page does.
+   * It must not ease or overshoot — it stands for a position, not a gesture.
+   */
+  transition: top var(--travel, 120ms) linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-cursor {
+    transition-duration: 1ms;
+  }
+
+  .scroll-ladder {
+    transition-duration: 1ms;
+    transform: none;
+  }
 }
 
 /* ─── Normalized ChordPro extensions ───────────────────────────────────────
@@ -2372,14 +2745,46 @@ body {
   font-weight: 700;
 }
 
-/* {x_repeat_start: n} … {x_repeat_end} */
+/* {x_repeat_start: n} … {x_repeat_end}
+ *
+ * The rule hangs in a gutter the whole section carries, not in padding of the
+ * group's own: the repeated lines and the lines around them belong to one verse
+ * and have to start on the same column, and indenting only the group made the
+ * left edge of the verse step in and out around it.
+ */
+.section-repeats {
+  padding-left: var(--repeat-gutter);
+}
+
 .repeat-group {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 2px 0;
-  padding-left: 8px;
-  border-left: 2px solid var(--text-muted);
+}
+
+/*
+ * Starts at the first line's lyric, not at the chord row above it: the rule
+ * brackets the words being sung twice, and reaching up over the chords made it
+ * look like it had slipped a row. One chord slot is 0.85em text on a 1.3 line,
+ * so 1.105em of the lyrics' own size — the slot keeps that height whether the
+ * chords are shown, hidden or absent, so every group starts level.
+ */
+.repeat-group::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--repeat-gutter));
+  top: 1.105em;
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--text-muted);
+}
+
+/* A group inside a group: closer in, so the two rules read as nested */
+.repeat-group .repeat-group::before {
+  left: calc(-0.5 * var(--repeat-gutter));
 }
 
 .repeat-body {

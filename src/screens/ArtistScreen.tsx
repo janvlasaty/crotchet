@@ -40,7 +40,7 @@ export const ArtistScreen: React.FC = () => {
     <div className="screen artist-screen">
       <FloatingHeader
         title={artist}
-        icon={<X size={22} strokeWidth={2.5} />}
+        icon={<X size={20} strokeWidth={2.5} />}
         actionLabel="Zavřít"
         onAction={() => navigate('/')}
         revealed={revealed}

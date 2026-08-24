@@ -97,6 +97,46 @@ export async function saveSong(id: string, chordpro: string): Promise<Song> {
   return song;
 }
 
+/** How many songs one import transaction parses and writes before yielding. */
+const IMPORT_CHUNK = 100;
+
+/**
+ * Bulk-import songs from a song pack. Rows are tagged `source: 'import'` so
+ * `seedSongsIfNeeded` leaves them alone, and are written in chunks so a
+ * multi-thousand-song pack reports progress instead of freezing the UI.
+ * Returns the number of songs written.
+ */
+export async function importSongs(
+  entries: Array<{ id: string; chordpro: string }>,
+  onProgress?: (done: number, total: number) => void
+): Promise<number> {
+  const db = await getDB();
+  let done = 0;
+
+  for (let start = 0; start < entries.length; start += IMPORT_CHUNK) {
+    const chunk = entries.slice(start, start + IMPORT_CHUNK);
+    // Parse outside the transaction: an idle IndexedDB transaction auto-commits,
+    // and parsing is the slow half.
+    const rows = chunk.map(({ id, chordpro }) => ({
+      id,
+      chordpro,
+      index: buildSongIndex(id, chordpro),
+      source: 'import' as const,
+    }));
+
+    const tx = db.transaction('songs', 'readwrite');
+    for (const row of rows) tx.store.put(row);
+    await tx.done;
+
+    done += rows.length;
+    onProgress?.(done, entries.length);
+    // Let the browser paint the progress before the next chunk hogs the thread
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+
+  return done;
+}
+
 /** Get all songs */
 export async function getAllSongs(): Promise<Song[]> {
   const db = await getDB();
@@ -286,12 +326,16 @@ export async function seedSongsIfNeeded(songs: Array<{ id: string; chordpro: str
     const index = buildSongIndex(id, chordpro);
     await tx.store.put({ id, chordpro, index });
   }
-  // Drop rows that are no longer in the song set. Without this, renaming an id
-  // leaves the old row behind forever and it keeps serving stale content on
-  // /play/:id. The store is seed-only, so nothing user-authored is at risk.
+  // Drop seeded rows that are no longer in the song set. Without this, renaming
+  // an id leaves the old row behind forever and it keeps serving stale content
+  // on /play/:id. Imported rows are skipped — those are the user's library.
   const live = new Set(songs.map(s => s.id));
-  for (const id of await tx.store.getAllKeys()) {
-    if (!live.has(String(id))) await tx.store.delete(id);
+  let cursor = await tx.store.openCursor();
+  while (cursor) {
+    if (!live.has(String(cursor.key)) && cursor.value.source !== 'import') {
+      await cursor.delete();
+    }
+    cursor = await cursor.continue();
   }
   await tx.done;
 
