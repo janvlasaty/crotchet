@@ -94,6 +94,7 @@ export async function saveSong(id: string, chordpro: string): Promise<Song> {
   const index = buildSongIndex(id, chordpro);
   const song: Song = { id, chordpro, index };
   await db.put('songs', song);
+  forgetSongs();
   return song;
 }
 
@@ -128,6 +129,7 @@ export async function importSongs(
     for (const row of rows) tx.store.put(row);
     await tx.done;
 
+    forgetSongs();
     done += rows.length;
     onProgress?.(done, entries.length);
     // Let the browser paint the progress before the next chunk hogs the thread
@@ -137,10 +139,32 @@ export async function importSongs(
   return done;
 }
 
+/**
+ * The library as it was last read, kept for the screens that open onto it. The
+ * artist screen and a setlist both need every song to draw their list, and both
+ * are opened by a card growing into their hero — a screen that arrives empty has
+ * nothing for that card to grow into (see `warmSongs` below). Dropped on every
+ * write, so a deleted or re-imported song is never served from here.
+ */
+let librarySnapshot: Song[] | null = null;
+
+/** Synchronous, hence usable as initial state. Null until a read has happened. */
+export function getWarmLibrary(): Song[] | null {
+  return librarySnapshot;
+}
+
+/** Every write goes through here: nothing remembered outlives the songs table. */
+function forgetSongs(): void {
+  librarySnapshot = null;
+  warmSongs.clear();
+}
+
 /** Get all songs */
 export async function getAllSongs(): Promise<Song[]> {
   const db = await getDB();
-  return db.getAll('songs');
+  const all = await db.getAll('songs');
+  librarySnapshot = all;
+  return all;
 }
 
 /** Get a song by ID */
@@ -153,6 +177,7 @@ export async function getSong(id: string): Promise<Song | undefined> {
 export async function deleteSong(id: string): Promise<void> {
   const db = await getDB();
   await db.delete('songs', id);
+  forgetSongs();
 }
 
 /** Global app settings stored in localStorage */
@@ -219,6 +244,47 @@ export function saveRecentCache(entries: RecentEntry[]): void {
 }
 
 /**
+ * A song and its prefs held in memory, so the play screen can paint its hero on
+ * the very first frame instead of a frame or two after IndexedDB answers.
+ *
+ * The card that opens a song warms it before the screen transition starts (see
+ * `morphNavigate`), which is what lets the arriving screen be complete when the
+ * browser snapshots it — an empty screen there has no hero for the tapped card
+ * to grow into, and the whole thing degrades to a cross-fade into "Načítám…".
+ */
+const warmSongs = new Map<string, { song: Song; prefs: SongPrefs }>();
+
+/** The song open, the ones around it — a handful, not the library. */
+const WARM_LIMIT = 8;
+
+/** Synchronous, hence usable during render. Undefined until warmed. */
+export function getWarmSong(id: string): { song: Song; prefs: SongPrefs } | undefined {
+  return warmSongs.get(id);
+}
+
+/**
+ * Read a song and its prefs, remembering both. Resolves immediately once the
+ * song has been warmed, so the play screen's own load is a microtask on arrival.
+ */
+export async function loadSong(id: string): Promise<{ song: Song; prefs: SongPrefs } | null> {
+  const warm = warmSongs.get(id);
+  if (warm) return warm;
+  const song = await getSong(id);
+  if (!song) return null;
+  // Prefs come second: a fresh row seeds its capo from the song's {capo}
+  const prefs = await getSongPrefs(id, parseChordPro(song.chordpro).capo);
+  const entry = { song, prefs };
+  if (warmSongs.size >= WARM_LIMIT) warmSongs.delete(warmSongs.keys().next().value as string);
+  warmSongs.set(id, entry);
+  return entry;
+}
+
+/** Warm a song without caring about the result — for a card about to open it. */
+export async function warmSong(id: string): Promise<void> {
+  await loadSong(id);
+}
+
+/**
  * Get or create song prefs (uses global defaults).
  * `fileCapo` is the song's own `{capo}` — it seeds a fresh row so the song
  * first opens exactly as it was written down. A stored row always wins.
@@ -249,6 +315,10 @@ function resolveChordMode(prefs: SongPrefs): ChordMode {
 
 /** Save song prefs */
 export async function saveSongPrefs(prefs: SongPrefs): Promise<void> {
+  // The warm copy is what the screen paints on re-entry; a stale transpose there
+  // would flash the old key before IndexedDB corrected it.
+  const warm = warmSongs.get(prefs.songId);
+  if (warm) warmSongs.set(prefs.songId, { ...warm, prefs });
   const db = await getDB();
   await db.put('prefs', prefs);
 }
@@ -280,11 +350,14 @@ export async function getRecentPlays(limit: number = 20): Promise<PlayRecord[]> 
 export async function saveSetlist(setlist: Setlist): Promise<void> {
   const db = await getDB();
   await db.put('setlists', setlist);
+  await refreshSetlistCache(db);
 }
 
 export async function getAllSetlists(): Promise<Setlist[]> {
   const db = await getDB();
-  return db.getAll('setlists');
+  const setlists = await db.getAll('setlists');
+  saveSetlistCache(setlists);
+  return setlists;
 }
 
 export async function getSetlist(id: string): Promise<Setlist | undefined> {
@@ -295,6 +368,38 @@ export async function getSetlist(id: string): Promise<Setlist | undefined> {
 export async function deleteSetlist(id: string): Promise<void> {
   const db = await getDB();
   await db.delete('setlists', id);
+  await refreshSetlistCache(db);
+}
+
+/**
+ * The home screen's setlist rail, cached like the recently-played one so it
+ * paints on the first frame. Coming back from a setlist the rail was already on
+ * screen a moment ago, and waiting for IndexedDB to say so again made the cards
+ * blink out and back in.
+ *
+ * Written on every read *and* every mutation, so a setlist that has just been
+ * renamed, created or deleted is never briefly resurrected from a stale cache.
+ */
+const SETLIST_CACHE_KEY = 'zpevnik-setlists';
+
+export function getSetlistCache(): Setlist[] {
+  try {
+    const raw = localStorage.getItem(SETLIST_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSetlistCache(setlists: Setlist[]): void {
+  try {
+    localStorage.setItem(SETLIST_CACHE_KEY, JSON.stringify(setlists));
+  } catch { /* quota or private mode — the rail just waits for the read */ }
+}
+
+async function refreshSetlistCache(db: IDBPDatabase<ZpevnikDB>): Promise<void> {
+  saveSetlistCache(await db.getAll('setlists'));
 }
 
 /**
@@ -338,6 +443,7 @@ export async function seedSongsIfNeeded(songs: Array<{ id: string; chordpro: str
     cursor = await cursor.continue();
   }
   await tx.done;
+  forgetSongs();
 
   await db.put('meta', { key: 'seed', value: stamp });
 }

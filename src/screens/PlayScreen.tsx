@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  getSong,
-  getSongPrefs,
+  loadSong,
+  getWarmSong,
+  warmSong,
   saveSongPrefs,
   recordPlay,
   getAllSongs,
@@ -17,12 +18,17 @@ import { playReferenceTone, playClick, Metronome } from '../lib/audio';
 import { SongRenderer } from '../components/SongRenderer';
 import { FloatingHeader, useHeaderReveal } from '../components/FloatingHeader';
 import { SearchFab } from '../components/SearchFab';
+import { ActionPill, MORE_KEY } from '../components/ActionPill';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { useCloseScreen } from '../hooks/useCloseScreen';
+import { UNKNOWN_ARTIST } from '../lib/artists';
+import { morphKey, morphNavigate, morphPair } from '../lib/morph';
 import { usePinchZoom } from '../hooks/usePinchZoom';
 import {
   X,
   Play,
   Pause,
+  ChevronLeft,
   ChevronRight,
   ChevronDown,
   Minus,
@@ -31,7 +37,6 @@ import {
   // `Metronome` here would collide with the audio clock of the same name
   Metronome as MetronomeIcon,
   Music,
-  Ellipsis,
 } from 'lucide-react';
 import { CHORD_COLORS } from '../lib/chordColors';
 import {
@@ -74,22 +79,13 @@ const clampSpeed = (s: number) => Math.min(SPEED_MAX, Math.max(SPEED_MIN, s));
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * The pill's four panels. Each one unfolds from its own icon, so what used to be
- * three chip popovers plus a settings sheet is now one surface with one origin.
+ * The pill's dials, each unfolding a panel from its own icon — so what used to
+ * be three chip popovers is one surface with one origin. The ellipsis's own
+ * panel (`MORE_KEY`, the settings sheet) is the fourth, and the pill adds it.
  */
-type ToolMenu = 'key' | 'tempo' | 'tone' | 'more';
+type ToolMenu = 'key' | 'tempo' | 'tone';
 
-/**
- * The pill's own box, which the panel grows out of. The panel is bigger in both
- * directions and shares the pill's corner, so the morph is pure growth — the
- * shape never has to shrink first to become the box.
- */
-interface MorphOrigin {
-  width: number;
-  height: number;
-}
-
-const TOOL_TITLE: Record<ToolMenu, string> = {
+const TOOL_TITLE: Record<ToolMenu | typeof MORE_KEY, string> = {
   key: 'Tónina a capo',
   tempo: 'Tempo',
   tone: 'Referenční tóny',
@@ -114,15 +110,28 @@ export const PlayScreen: React.FC = () => {
   const [searchParams] = useSearchParams();
   /** Set while playing through a setlist: the queue replaces the suggestions. */
   const setlistId = searchParams.get('setlist');
-  const [setlist, setSetlist] = useState<Setlist | null>(null);
-  const [song, setSong] = useState<Song | null>(null);
-  const [prefs, setPrefs] = useState<SongPrefs | null>(null);
   /**
-   * Which tool panel the pill has unfolded, and the icon it grew out of. The
-   * name outlives `toolOpen` so the content is still there to animate shut.
+   * The screen this song was opened from, carried in the URL rather than left to
+   * the history stack. Chaining recommendations replaces the entry instead of
+   * pushing, so history remembers where the chain *started* and not where it is
+   * now — ten songs later, going back would land on an artist nothing on screen
+   * has anything to do with. Here the origin travels with the song, and the hop
+   * that walks away from it drops it (see `playRecommendation`).
    */
-  const [tool, setTool] = useState<{ name: ToolMenu; origin: MorphOrigin } | null>(null);
-  const [toolOpen, setToolOpen] = useState(false);
+  const artistOrigin = searchParams.get('artist');
+  const [setlist, setSetlist] = useState<Setlist | null>(null);
+  const [songRow, setSong] = useState<Song | null>(null);
+  const [songPrefs, setPrefs] = useState<SongPrefs | null>(null);
+  /**
+   * The song on screen, and never the one before it. Switching songs — the
+   * recommendations, the setlist queue — keeps this component, so state loaded
+   * for the song just left has to be disowned by hand or the arriving screen
+   * would still be showing its words. The warm copy stands in from the first
+   * frame (see `loadSong`), which is what the opening morph lands on.
+   */
+  const warm = id ? getWarmSong(id) : undefined;
+  const song = songRow?.id === id ? songRow : warm?.song ?? null;
+  const prefs = songPrefs?.songId === id ? songPrefs : warm?.prefs ?? null;
   const [chordColor, setChordColor] = useState(() => getAppSettings().chordColor);
   /** Audible click, owned here so it survives the panel being dismissed. */
   const [metronomeOn, setMetronomeOn] = useState(false);
@@ -168,8 +177,6 @@ export const PlayScreen: React.FC = () => {
   const autoScrollingRef = useRef(false);
   const { revealed, setRevealed, heroRef, scrimRef, updateReveal } = useHeaderReveal();
   const scrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  /** Measured on open: the shape the tool panel grows out of. */
-  const pillRef = useRef<HTMLDivElement>(null);
   /** The size the lyrics are on screen right now, pinch included. */
   const fontScaleRef = useRef(1);
 
@@ -220,12 +227,11 @@ export const PlayScreen: React.FC = () => {
     setScrollProgress(0);
     setRevealed(false);
     contentRef.current?.scrollTo({ top: 0 });
-    // Prefs come second: a fresh row seeds its capo from the song's {capo}
-    getSong(id).then(async s => {
-      if (!s) return;
-      const p = await getSongPrefs(id, parseChordPro(s.chordpro).capo);
-      setSong(s);
-      setPrefs(p);
+    // Warm already, if a card opened this song: resolves before the first paint
+    loadSong(id).then(loaded => {
+      if (!loaded) return;
+      setSong(loaded.song);
+      setPrefs(loaded.prefs);
       recordPlay(id);
     });
     // Pool for the end-of-song recommendations
@@ -400,18 +406,29 @@ export const PlayScreen: React.FC = () => {
     return () => clearTimeout(fade);
   }, [autoScrolling, ladderShown]);
 
-  // Close leaves the song: back to where we came from, or home on a deep link.
-  // History idx stays put across replace-navigations between recommendations.
-  const handleClose = useCallback(() => {
-    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
-    if (idx > 0) navigate(-1);
-    else navigate('/', { replace: true });
-  }, [navigate]);
+  /**
+   * Where closing goes. A setlist queue and an artist the chain has stayed
+   * inside are both still on screen behind the song, so closing returns to them;
+   * anything else — a search hit, a deep link, a chain that has wandered off —
+   * has nothing behind it worth seeing, and goes home.
+   */
+  const closeOrigin = setlistId
+    ? `/setlist/${setlistId}`
+    : artistOrigin
+      ? `/artist/${encodeURIComponent(artistOrigin)}`
+      : null;
+  // The hero shrinks back into the card that opened it, wherever that was
+  const handleClose = useCloseScreen(id ? morphKey.song(id) : undefined, closeOrigin);
 
   // replace: chaining recommendations must not stack up history
   /** Next song in the queue, keeping the setlist context in the URL. */
   const playInSetlist = useCallback(
-    (songId: string) => navigate(`/play/${songId}?setlist=${setlistId}`, { replace: true }),
+    (songId: string) =>
+      morphNavigate(
+        morphKey.song(songId),
+        () => navigate(`/play/${songId}?setlist=${setlistId}`, { replace: true }),
+        () => warmSong(songId)
+      ),
     [navigate, setlistId]
   );
 
@@ -421,9 +438,27 @@ export const PlayScreen: React.FC = () => {
     [navigate, id]
   );
 
+  /**
+   * Open a suggestion, or a search hit, in place of this song. The artist origin
+   * rides along only while the chain is still inside that artist: the hop that
+   * leaves them is the hop that makes going back to them meaningless, so it is
+   * also the hop that forgets them, and closing from there goes home instead.
+   */
   const playRecommendation = useCallback(
-    (songId: string) => navigate(`/play/${songId}`, { replace: true }),
-    [navigate]
+    (songId: string) => {
+      const next = library.find(s => s.id === songId);
+      // Same fallback the artist screen groups by, so its unnamed-artist page
+      // holds together as a chain like any other
+      const stillSameArtist =
+        artistOrigin && (next?.index.artist?.trim() || UNKNOWN_ARTIST) === artistOrigin;
+      const query = stillSameArtist ? `?artist=${encodeURIComponent(artistOrigin)}` : '';
+      return morphNavigate(
+        morphKey.song(songId),
+        () => navigate(`/play/${songId}${query}`, { replace: true }),
+        () => warmSong(songId)
+      );
+    },
+    [navigate, library, artistOrigin]
   );
 
   const handleScrollToTop = useCallback(() => {
@@ -527,30 +562,6 @@ export const PlayScreen: React.FC = () => {
 
   const toggleMetronome = useCallback(() => setMetronomeOn(on => !on), []);
 
-  /**
-   * Unfolds a tool panel from the icon that was tapped: the icon's geometry is
-   * measured here and handed to the panel, which starts its reveal as a sliver
-   * the pill's own shape. Tapping the same icon again folds it back.
-   */
-  const toggleTool = useCallback(
-    (name: ToolMenu, event: React.MouseEvent<HTMLButtonElement>) => {
-      if (toolOpen && tool?.name === name) {
-        setToolOpen(false);
-        return;
-      }
-      // The pill, not the icon: growth starts from the whole shape on screen
-      const box = pillRef.current?.getBoundingClientRect();
-      setTool({
-        name,
-        origin: { width: box?.width ?? 200, height: box?.height ?? 56 },
-      });
-      setToolOpen(true);
-    },
-    [tool, toolOpen]
-  );
-
-  const closeTool = useCallback(() => setToolOpen(false), []);
-
   const handleSetTempo = useCallback((tempo: number) => {
     if (!prefs) return;
     const updated = { ...prefs, tempo };
@@ -567,13 +578,6 @@ export const PlayScreen: React.FC = () => {
   // header trades the artist for these, since mid-song that is what you want
   const shapeChords = [...new Set(chords.map(c => transposeChord(c, shapeShift, shapeKey)))];
   const heroTempo = prefs.tempo || parsed.tempo;
-  /** Only a panel that is actually unfolded lights up its icon. */
-  const openTool = toolOpen ? tool?.name : null;
-  /** The pill's box — where the panel's growth starts. */
-  const morphVars = {
-    '--morph-width': `${tool?.origin.width ?? 200}px`,
-    '--morph-height': `${tool?.origin.height ?? 56}px`,
-  } as React.CSSProperties;
   // Tones are what the room hears, so they count the capo the song ships with
   const toneChords = [
     ...new Set(chords.map(c => transposeChord(c, baseCapo + prefs.transpose, currentKey))),
@@ -604,8 +608,8 @@ export const PlayScreen: React.FC = () => {
             </span>
           )
         }
-        icon={<X size={20} strokeWidth={2.5} />}
-        actionLabel="Zavřít"
+        icon={<ChevronLeft size={22} strokeWidth={2.5} />}
+        actionLabel="Zpět"
         onAction={handleClose}
         revealed={revealed}
         onTitleClick={handleScrollToTop}
@@ -617,136 +621,94 @@ export const PlayScreen: React.FC = () => {
         scrolled the three dials fold away and only the ellipsis is left, so the
         lyrics get the top edge back; the panel behind it carries them all.
       */}
-      <div
-        className={`top-actions ${revealed ? 'collapsed' : ''} ${
-          metronomeOn ? 'has-running' : ''
-        } ${toolOpen ? 'morphed' : ''}`}
-        ref={pillRef}
-        style={morphVars}
-        role="group"
-        aria-label="Nástroje písně"
+      <ActionPill
+        label="Nástroje písně"
+        collapsed={revealed}
+        hasRunning={metronomeOn}
+        moreLabel="Nastavení"
+        panelLabel={key => TOOL_TITLE[key]}
+        actions={[
+          { key: 'key', icon: Guitar, label: 'Tónina a capo' },
+          {
+            key: 'tempo',
+            icon: MetronomeIcon,
+            label: 'Tempo a metronom',
+            title: metronomeBpm ? `Tempo (${metronomeBpm} BPM)` : 'Tempo',
+            className: metronomeOn ? 'ticking' : '',
+          },
+          {
+            key: 'tone',
+            icon: Music,
+            label: 'Referenční tóny',
+            disabled: toneChords.length === 0,
+          },
+        ]}
       >
-        <button
-          className={`top-action ${openTool === 'key' ? 'open' : ''}`}
-          tabIndex={revealed ? -1 : 0}
-          onClick={e => toggleTool('key', e)}
-          title="Tónina a capo"
-          aria-label="Tónina a capo"
-          aria-expanded={openTool === 'key'}
-        >
-          <Guitar size={20} strokeWidth={2.5} />
-        </button>
-        <button
-          className={`top-action ${openTool === 'tempo' ? 'open' : ''} ${
-            metronomeOn ? 'ticking' : ''
-          }`}
-          tabIndex={revealed ? -1 : 0}
-          onClick={e => toggleTool('tempo', e)}
-          title={metronomeBpm ? `Tempo (${metronomeBpm} BPM)` : 'Tempo'}
-          aria-label="Tempo a metronom"
-          aria-expanded={openTool === 'tempo'}
-        >
-          <MetronomeIcon size={20} strokeWidth={2.5} />
-        </button>
-        <button
-          className={`top-action ${openTool === 'tone' ? 'open' : ''}`}
-          tabIndex={revealed ? -1 : 0}
-          onClick={e => toggleTool('tone', e)}
-          disabled={toneChords.length === 0}
-          title="Referenční tóny"
-          aria-label="Referenční tóny"
-          aria-expanded={openTool === 'tone'}
-        >
-          <Music size={20} strokeWidth={2.5} />
-        </button>
-        <button
-          className={`top-action top-action-more ${openTool === 'more' ? 'open' : ''}`}
-          onClick={e => toggleTool('more', e)}
-          title="Nastavení"
-          aria-label="Nastavení"
-          aria-expanded={openTool === 'more'}
-        >
-          <Ellipsis size={20} strokeWidth={2.5} />
-        </button>
-      </div>
-
-      {/* Tapping anywhere else folds the panel back into its icon */}
-      {toolOpen && <div className="tool-dismiss" onClick={closeTool} />}
-
-      {/*
-        One surface for all four panels, unfolding from the icon that opened it:
-        laid out at full size and revealed by an animated clip-path, so nothing
-        reflows mid-morph and the height can stay `auto` (see .info-dropdown,
-        which does the same on the home screen).
-      */}
-      <div
-        className={`tool-panel ${toolOpen ? 'open' : ''}`}
-        role="dialog"
-        aria-label={tool ? TOOL_TITLE[tool.name] : undefined}
-        aria-hidden={!toolOpen}
-        style={morphVars}
-      >
-        {tool?.name === 'key' && (
+        {tool => (
           <>
-            {/* Combined: transposing and capoing are the same decision twice */}
-            <div className="prep-section">
-              <label>Tónina</label>
-              <KeyControl
+            {tool === 'key' && (
+              <>
+                {/* Combined: transposing and capoing are one decision twice */}
+                <div className="prep-section">
+                  <label>Tónina</label>
+                  <KeyControl
+                    currentKey={currentKey}
+                    transpose={prefs.transpose}
+                    onTranspose={handleTranspose}
+                  />
+                </div>
+                <div className="prep-section">
+                  <label>Capo{shapeKey ? ` · hmaty ${shapeKey}` : ''}</label>
+                  <CapoControl capo={prefs.capo} onCapoChange={handleCapoChange} />
+                </div>
+              </>
+            )}
+
+            {tool === 'tempo' && (
+              <div className="prep-section">
+                <label>Tempo</label>
+                <TempoControl
+                  bpm={heroTempo}
+                  onSetTempo={handleSetTempo}
+                  audible={metronomeOn}
+                  onToggleAudible={toggleMetronome}
+                />
+              </div>
+            )}
+
+            {tool === 'tone' && (
+              <div className="prep-section">
+                <label>Referenční tóny</label>
+                {/* Every chord in the song, sounding pitch — tap to hear it */}
+                <div className="tone-row">
+                  {toneChords.map(c => (
+                    <button key={c} className="tone-key" onClick={() => playReferenceTone(c)}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {tool === MORE_KEY && (
+              <SongSettings
+                prefs={prefs}
                 currentKey={currentKey}
-                transpose={prefs.transpose}
+                tempo={heroTempo}
+                chordColor={chordColor}
+                metronomeOn={metronomeOn}
+                onToggleMetronome={toggleMetronome}
                 onTranspose={handleTranspose}
+                onCapoChange={handleCapoChange}
+                onSetTempo={handleSetTempo}
+                onChordMode={handleChordMode}
+                onFontScale={handleFontScale}
+                onChordColor={handleChordColor}
               />
-            </div>
-            <div className="prep-section">
-              <label>Capo{shapeKey ? ` · hmaty ${shapeKey}` : ''}</label>
-              <CapoControl capo={prefs.capo} onCapoChange={handleCapoChange} />
-            </div>
+            )}
           </>
         )}
-
-        {tool?.name === 'tempo' && (
-          <div className="prep-section">
-            <label>Tempo</label>
-            <TempoControl
-              bpm={heroTempo}
-              onSetTempo={handleSetTempo}
-              audible={metronomeOn}
-              onToggleAudible={toggleMetronome}
-            />
-          </div>
-        )}
-
-        {tool?.name === 'tone' && (
-          <div className="prep-section">
-            <label>Referenční tóny</label>
-            {/* Every chord in the song, sounding pitch — tap one to hear it */}
-            <div className="tone-row">
-              {toneChords.map(c => (
-                <button key={c} className="tone-key" onClick={() => playReferenceTone(c)}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tool?.name === 'more' && (
-          <SongSettings
-            prefs={prefs}
-            currentKey={currentKey}
-            tempo={heroTempo}
-            chordColor={chordColor}
-            metronomeOn={metronomeOn}
-            onToggleMetronome={toggleMetronome}
-            onTranspose={handleTranspose}
-            onCapoChange={handleCapoChange}
-            onSetTempo={handleSetTempo}
-            onChordMode={handleChordMode}
-            onFontScale={handleFontScale}
-            onChordColor={handleChordColor}
-          />
-        )}
-      </div>
+      </ActionPill>
 
       {/* Song content */}
       <div
@@ -762,7 +724,8 @@ export const PlayScreen: React.FC = () => {
           setAutoScrolling(false);
         }}
       >
-        <header className="hero" ref={heroRef}>
+        {/* The other half of the card that opened this song — see lib/morph.ts */}
+        <header className="hero" ref={heroRef} {...morphPair(id ? morphKey.song(id) : '')}>
           <h1 className="hero-title">{parsed.title}</h1>
           {/* Just the interpret. Key, capo and tempo are set and read in the
               pill's panels, so restating them here only crowded the title. */}
@@ -770,7 +733,11 @@ export const PlayScreen: React.FC = () => {
             <div className="hero-meta">
               <button
                 className="hero-meta-lead hero-meta-link"
-                onClick={() => navigate(`/artist/${encodeURIComponent(artist)}`)}
+                onClick={() =>
+                  morphNavigate(morphKey.artist(artist), () =>
+                    navigate(`/artist/${encodeURIComponent(artist)}`)
+                  )
+                }
               >
                 {artist}
               </button>
@@ -797,7 +764,11 @@ export const PlayScreen: React.FC = () => {
                   {/* Straight to the setlist, to see the whole running order */}
                   <button
                     className="rec-head-title"
-                    onClick={() => navigate(`/setlist/${setlist.id}`)}
+                    onClick={() =>
+                      morphNavigate(morphKey.setlist(setlist.id), () =>
+                        navigate(`/setlist/${setlist.id}`)
+                      )
+                    }
                   >
                     Další z {setlist.name}
                     <ChevronRight size={14} strokeWidth={2.5} />
@@ -817,6 +788,7 @@ export const PlayScreen: React.FC = () => {
                       key={s.id}
                       className="setlist-row"
                       style={{ animationDelay: `${i * 45}ms` }}
+                      {...morphPair(morphKey.song(s.id))}
                       onClick={() => playInSetlist(s.id)}
                     >
                       <span className="setlist-order">{queueStart + i}</span>
@@ -852,7 +824,11 @@ export const PlayScreen: React.FC = () => {
                     Další od{' '}
                     <button
                       className="rec-head-title rec-head-name"
-                      onClick={() => navigate(`/artist/${encodeURIComponent(artist)}`)}
+                      onClick={() =>
+                        morphNavigate(morphKey.artist(artist), () =>
+                          navigate(`/artist/${encodeURIComponent(artist)}`)
+                        )
+                      }
                     >
                       {artist}
                       <ChevronRight size={14} strokeWidth={2.5} />
@@ -924,12 +900,16 @@ export const PlayScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* Takes the play button's place once the song has been scrolled through */}
+      {/* Takes the play button's place once the song has been scrolled through —
+          the shared corner is the same one, so nothing has to be nudged here */}
       <SearchFab
-        className="in-control-bar"
         hidden={!atBottom}
         onPickSong={playRecommendation}
-        onPickArtist={artist => navigate(`/artist/${encodeURIComponent(artist)}`)}
+        onPickArtist={artist =>
+          morphNavigate(morphKey.artist(artist), () =>
+            navigate(`/artist/${encodeURIComponent(artist)}`)
+          )
+        }
       />
 
     </div>
@@ -1024,6 +1004,7 @@ const RecommendationRail: React.FC<RecommendationRailProps> = ({
           key={s.id}
           className="song-card"
           style={{ animationDelay: `${startDelay + delay}ms` }}
+          {...morphPair(morphKey.song(s.id))}
           onClick={() => onPick(s.id)}
         >
           <div className="song-card-title">{s.index.title}</div>

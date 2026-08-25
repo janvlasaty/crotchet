@@ -7,7 +7,9 @@ import {
   saveSetlist,
   getRecentCache,
   saveRecentCache,
+  getSetlistCache,
   importSongs,
+  warmSong,
   type RecentEntry,
 } from '../lib/db';
 import { initSearch } from '../lib/search';
@@ -16,6 +18,7 @@ import { readSongPack } from '../lib/songpack';
 import { SearchFab, songCountLabel } from '../components/SearchFab';
 import { RefreshCw, Plus, Ellipsis, Download } from 'lucide-react';
 import { UNKNOWN_ARTIST, indexLetter } from '../lib/artists';
+import { morphKey, morphNavigate, morphPair } from '../lib/morph';
 import type { Song, Setlist } from '../types';
 
 /** How long the outgoing cards take to fade before the next letter arrives. */
@@ -33,7 +36,8 @@ export const HomeScreen: React.FC = () => {
   const [songs, setSongs] = useState<Song[]>([]);
   // Straight from cache, so the rail is on screen before IndexedDB answers
   const [recentSongs, setRecentSongs] = useState<RecentEntry[]>(getRecentCache);
-  const [setlists, setSetlists] = useState<Setlist[]>([]);
+  // Cached too, so coming back from a setlist does not blink the rail out
+  const [setlists, setSetlists] = useState<Setlist[]>(getSetlistCache);
   const [newName, setNewName] = useState<string | null>(null);
   const [letter, setLetter] = useState<string | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -219,47 +223,51 @@ export const HomeScreen: React.FC = () => {
       <header className="home-header">
         <h1>Zpěvník</h1>
 
-        <div className="info-menu">
-          <button
-            className={`info-btn ${infoOpen ? 'active' : ''}`}
-            onClick={() => setInfoOpen(o => !o)}
-            aria-label="O aplikaci"
-            aria-expanded={infoOpen}
-          >
-            <Ellipsis size={20} strokeWidth={2.5} />
-          </button>
+        <button
+          className={`info-btn ${infoOpen ? 'active' : ''}`}
+          onClick={() => setInfoOpen(o => !o)}
+          aria-label="O aplikaci"
+          aria-expanded={infoOpen}
+        >
+          <Ellipsis size={20} strokeWidth={2.5} />
+        </button>
 
-          {/* Stays mounted so it can animate shut as well as open; while closed
-              it is clipped to the button's own square and made invisible. */}
-          <div className={`info-dropdown ${infoOpen ? 'open' : ''}`} role="menu">
-            <div className="info-version">Verze {__APP_VERSION__}</div>
-            <button className="info-action" onClick={() => applyUpdate()} tabIndex={infoOpen ? 0 : -1}>
-              <RefreshCw size={14} />
-              Obnovit aplikaci
-            </button>
-            <button
-              className="info-action"
-              onClick={() => packInput.current?.click()}
-              tabIndex={infoOpen ? 0 : -1}
-            >
-              <Download size={14} />
-              Importovat písně
-            </button>
-          </div>
-
-          {/* iOS offers Files/iCloud from here; .gz packs are unzipped in-app */}
-          <input
-            ref={packInput}
-            type="file"
-            accept=".json,.gz,application/json,application/gzip"
-            hidden
-            onChange={handlePackPicked}
-          />
-        </div>
+        {/* iOS offers Files/iCloud from here; .gz packs are unzipped in-app */}
+        <input
+          ref={packInput}
+          type="file"
+          accept=".json,.gz,application/json,application/gzip"
+          hidden
+          onChange={handlePackPicked}
+        />
       </header>
 
-      {/* Tap anywhere else to dismiss the dropdown */}
+      {/*
+        Backdrop and panel are siblings of the header, not children of it — the
+        same three layers the song screen's tools use: the header band, then the
+        dismiss layer over it, then the panel over that. Inside the header they
+        would be trapped under its band, since the band has to sit above the
+        cards scrolling beneath it.
+      */}
       {infoOpen && <div className="info-backdrop" onClick={() => setInfoOpen(false)} />}
+
+      {/* Stays mounted so it can animate shut as well as open; while closed
+          it is clipped to the button's own square and made invisible. */}
+      <div className={`info-dropdown ${infoOpen ? 'open' : ''}`} role="menu">
+        <div className="info-version">Verze {__APP_VERSION__}</div>
+        <button className="info-action" onClick={() => applyUpdate()} tabIndex={infoOpen ? 0 : -1}>
+          <RefreshCw size={14} />
+          Obnovit aplikaci
+        </button>
+        <button
+          className="info-action"
+          onClick={() => packInput.current?.click()}
+          tabIndex={infoOpen ? 0 : -1}
+        >
+          <Download size={14} />
+          Importovat písně
+        </button>
+      </div>
 
       <div className="home-scroll">
         {recentSongs.length > 0 && (
@@ -268,7 +276,18 @@ export const HomeScreen: React.FC = () => {
             {/* Two rows scrolling sideways, same rail as the play screen */}
             <div className="card-rail rec-rail">
               {recentSongs.map(r => (
-                <div key={r.id} className="song-card" onClick={() => navigate(`/play/${r.id}`)}>
+                <div
+                  key={r.id}
+                  className="song-card"
+                  {...morphPair(morphKey.song(r.id))}
+                  onClick={() =>
+                    morphNavigate(
+                      morphKey.song(r.id),
+                      () => navigate(`/play/${r.id}`),
+                      () => warmSong(r.id)
+                    )
+                  }
+                >
                   <div className="song-card-title">{r.title}</div>
                   <div className="song-card-artist">{r.artist}</div>
                 </div>
@@ -290,7 +309,10 @@ export const HomeScreen: React.FC = () => {
               <div
                 key={sl.id}
                 className="song-card"
-                onClick={() => navigate(`/setlist/${sl.id}`)}
+                {...morphPair(morphKey.setlist(sl.id))}
+                onClick={() =>
+                  morphNavigate(morphKey.setlist(sl.id), () => navigate(`/setlist/${sl.id}`))
+                }
               >
                 <div className="song-card-title">{sl.name}</div>
                 <div className="song-card-artist">{songCountLabel(sl.songIds.length)}</div>
@@ -337,7 +359,12 @@ export const HomeScreen: React.FC = () => {
                 key={g.artist}
                 className="song-card"
                 style={{ animationDelay: `${Math.min(i * 35, 420)}ms` }}
-                onClick={() => navigate(`/artist/${encodeURIComponent(g.artist)}`)}
+                {...morphPair(morphKey.artist(g.artist))}
+                onClick={() =>
+                  morphNavigate(morphKey.artist(g.artist), () =>
+                    navigate(`/artist/${encodeURIComponent(g.artist)}`)
+                  )
+                }
               >
                 <div className="song-card-title">{g.artist}</div>
                 <div className="song-card-artist">{songCountLabel(g.count)}</div>
@@ -432,8 +459,18 @@ export const HomeScreen: React.FC = () => {
       )}
 
       <SearchFab
-        onPickSong={id => navigate(`/play/${id}`)}
-        onPickArtist={artist => navigate(`/artist/${encodeURIComponent(artist)}`)}
+        onPickSong={id =>
+          morphNavigate(
+            morphKey.song(id),
+            () => navigate(`/play/${id}`),
+            () => warmSong(id)
+          )
+        }
+        onPickArtist={artist =>
+          morphNavigate(morphKey.artist(artist), () =>
+            navigate(`/artist/${encodeURIComponent(artist)}`)
+          )
+        }
       />
     </div>
   );

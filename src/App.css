@@ -39,6 +39,48 @@
   /* On-screen keyboard height, kept current by src/lib/keyboardInset.ts */
   --kb: 0px;
 
+  /*
+   * One geometry for every floating round control in the app — the play screen's
+   * close button, tool pill, play pill and search button all sit in the same
+   * 56px box on the same 12px inset from the window edge, and so does the home
+   * screen's info button and every other screen's search button. Anything that
+   * hangs off a corner takes its size, radius and inset from here so the four
+   * corners of any screen read as one layer.
+   */
+  --fab-inset: 12px;
+  --fab-size: 56px;
+  --fab-radius: 28px;
+  /* Clearance a scroller keeps at the bottom so its last row never hides
+     behind the floating button: the box, its inset, and a gap. */
+  --fab-clear: 84px;
+
+  /*
+   * The top band every screen's header occupies: --fab-inset + --fab-size + 8px,
+   * so a header is exactly as tall as the button floating in it. Content scrolls
+   * up underneath and dissolves into it — opaque behind the status bar and the
+   * Dynamic Island, then a short fade out over the rest of the band. One
+   * definition for the song/artist/setlist scrim and the home header alike.
+   */
+  --scrim-height: 76px;
+  --scrim: linear-gradient(
+    to bottom,
+    #000 0,
+    rgba(0, 0, 0, 0.96) 44px,
+    rgba(0, 0, 0, 0) 100%
+  );
+
+  /* The shared surface of these controls: a dark blurred pill. */
+  --fab-bg: rgba(28, 28, 30, 0.9);
+  --fab-border: 1px solid rgba(255, 255, 255, 0.08);
+  --fab-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+
+  /* ...and of the panel any of them morphs into: the same fill a shade more
+     opaque, since it has text on it, over the same border. */
+  --fab-panel-bg: rgba(28, 28, 30, 0.94);
+  --fab-panel-radius: 24px;
+  --fab-panel-shadow: 0 16px 44px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
   /* Left gutter a section holds open for a repeat group's rule */
   --repeat-gutter: 12px;
 
@@ -136,12 +178,31 @@ body {
 }
 
 /* Home Screen */
+/*
+ * Lifted out of the flow onto the same band the other screens' scrim occupies,
+ * with the same gradient: the list scrolls up under the title and dissolves
+ * there instead of stopping at a hard edge. Its own height is the band's — the
+ * inset, the button, and the 8px below it — so the two agree by construction.
+ */
 .home-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* The scrim's layer on every other screen: over the cards — which are
+     positioned, so being fixed alone would not be enough — and under the
+     dismiss layer and the panel above it. */
+  z-index: 29;
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 20px 8px 20px;
+  /* The ellipsis is a floating control like any other, so it keeps the app's
+     --fab-inset from the top and right edges — the same corner the other
+     screens' tool pill sits in, and the same column as the search button
+     below. Only the title keeps the page's own 20px left gutter. */
+  padding: var(--fab-inset) var(--fab-inset) 8px 20px;
 }
 
 .home-header h1 {
@@ -155,7 +216,9 @@ body {
 .home-scroll {
   flex: 1;
   overflow-y: auto;
-  padding-bottom: 96px;
+  /* Starts clear of the fixed header, then passes under it */
+  padding-top: calc(var(--scrim-height) + 4px);
+  padding-bottom: var(--fab-clear);
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
 }
@@ -659,12 +722,12 @@ body {
    the input, so the trigger stays under the thumb */
 .search-fab {
   position: fixed;
-  bottom: calc(16px + var(--kb));
-  right: 16px;
+  bottom: calc(var(--fab-inset) + var(--kb));
+  right: var(--fab-inset);
   box-sizing: border-box;
-  width: 56px;
-  height: 56px;
-  border-radius: 28px;
+  width: var(--fab-size);
+  height: var(--fab-size);
+  border-radius: var(--fab-radius);
   background: var(--accent);
   border: 1px solid transparent;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
@@ -685,17 +748,6 @@ body {
     border-color 220ms ease;
 }
 
-/* Play screen: sit exactly where the play button was, so one replaces the other.
-   Anchored right, so opening it grows the pill leftwards across the bar. */
-.search-fab.in-control-bar {
-  bottom: calc(12px + var(--kb));
-  right: 12px;
-}
-
-.search-fab.in-control-bar.open {
-  width: calc(100vw - 24px);
-}
-
 /* Scaled out while the other control owns the corner */
 .search-fab.tucked,
 .scroll-control.tucked {
@@ -704,8 +756,10 @@ body {
   pointer-events: none;
 }
 
+/* Opening grows the pill leftwards from its corner, to the same inset on the
+   far side — the play screen's bar and every other screen's button alike. */
 .search-fab.open {
-  width: calc(100vw - 32px);
+  width: calc(100vw - 2 * var(--fab-inset));
   background: rgba(28, 28, 30, 0.95);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
   -webkit-backdrop-filter: blur(20px);
@@ -727,11 +781,12 @@ body {
   right: -5px;
 }
 
-/* The glyph doubles as the open trigger, then becomes the field's leading icon */
+/* The glyph doubles as the open trigger, then becomes the field's leading icon.
+   Its box is the pill's, less the 1px borders. */
 .search-fab-trigger {
   flex-shrink: 0;
-  width: 54px;
-  height: 54px;
+  width: calc(var(--fab-size) - 2px);
+  height: calc(var(--fab-size) - 2px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -772,8 +827,8 @@ body {
 
 .search-fab-close {
   flex-shrink: 0;
-  width: 54px;
-  height: 54px;
+  width: calc(var(--fab-size) - 2px);
+  height: calc(var(--fab-size) - 2px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -897,19 +952,20 @@ body {
   position: relative;
 }
 
-/* Shared scroller for the screens that use a floating header over a hero */
+/* Shared scroller for the screens that use a floating header over a hero.
+   The top padding clears the header band and its fade — see --scrim-height. */
 .artist-scroll,
 .page-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 80px 20px 24px 20px;
+  padding: calc(var(--scrim-height) + 4px) 20px 24px 20px;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
 }
 
 /* Clears the floating search button, so the last row is never hidden by it */
 .page-scroll {
-  padding-bottom: 96px;
+  padding-bottom: var(--fab-clear);
 }
 
 /* Search — dropdown above the field, page stays visible */
@@ -939,10 +995,10 @@ body {
 /* Results sit straight on the blurred backdrop — the cards are the only chrome */
 .search-results {
   position: fixed;
-  top: 12px;
+  top: var(--fab-inset);
   bottom: var(--kb);
-  left: 16px;
-  right: 16px;
+  left: var(--fab-inset);
+  right: var(--fab-inset);
   z-index: 40;
   display: flex;
   flex-direction: column;
@@ -1032,22 +1088,22 @@ body {
    corner: identical 56px box, fill, border, blur and shadow. */
 .back-btn-floating {
   position: fixed;
-  top: 12px;
-  left: 12px;
-  width: 56px;
-  height: 56px;
-  border-radius: 28px;
-  background: rgba(28, 28, 30, 0.9);
+  top: var(--fab-inset);
+  left: var(--fab-inset);
+  width: var(--fab-size);
+  height: var(--fab-size);
+  border-radius: var(--fab-radius);
+  background: var(--fab-bg);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: var(--fab-border);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 30;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--fab-shadow);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
@@ -1059,8 +1115,8 @@ body {
  */
 .top-actions {
   position: fixed;
-  top: 12px;
-  right: 12px;
+  top: var(--fab-inset);
+  right: var(--fab-inset);
   z-index: 30;
   display: flex;
   align-items: center;
@@ -1069,13 +1125,13 @@ body {
      so nothing shifts it sideways as the dials fold away. The rounded ends clip
      the end taps instead. */
   padding: 0;
-  height: 56px;
-  border-radius: 28px;
-  background: rgba(28, 28, 30, 0.9);
+  height: var(--fab-size);
+  border-radius: var(--fab-radius);
+  background: var(--fab-bg);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  border: var(--fab-border);
+  box-shadow: var(--fab-shadow);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   /* The pill never changes shape: the panel grows out of it and covers it, and
@@ -1087,13 +1143,13 @@ body {
 }
 
 /*
- * Folded down to the same 56px circle as the close button opposite. Width is
- * the ellipsis's 54px plus the 1px borders; only its height has to grow, and
+ * Folded down to the same circle as the close button opposite: --fab-size, made
+ * of the ellipsis's box plus the pill's 1px borders. Only its height has to grow, and
  * that is centred, so the glyph does not move at all as the pill closes.
  */
 .top-actions.collapsed .top-action-more {
-  height: 54px;
-  border-radius: 27px;
+  height: calc(var(--fab-size) - 2px);
+  border-radius: calc(var(--fab-radius) - 1px);
 }
 
 /* No gaps between the taps — every pixel of the pill belongs to an action */
@@ -1129,13 +1185,49 @@ body {
 /*
  * The other way round, for a pill whose actions are its whole content: while
  * they are all reachable there is nothing for an ellipsis to stand for, so it
- * is the one folded away, and it grows in as they fold out. One morph, 146px
- * of three taps to the 56px circle.
+ * is the one folded away, and it takes the last action's place as they fold out.
+ *
+ * It is not a fourth tap growing in beside them: it lies *on* the last action's
+ * slot and the two glyphs cross-fade, so the fold reads the way the song
+ * screen's does — the icons ahead of it drift right as their boxes shrink, the
+ * last one turns into the ellipsis, and nothing slides in from the edge.
  */
+.top-actions.more-on-fold .top-action-more {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  width: calc(var(--fab-size) - 2px);
+  height: calc(var(--fab-size) - 2px);
+  border-radius: calc(var(--fab-radius) - 1px);
+  transition: opacity 160ms ease;
+}
+
 .top-actions.more-on-fold:not(.collapsed) .top-action-more {
-  width: 0;
   opacity: 0;
   pointer-events: none;
+}
+
+/*
+ * The action underneath it: the one place the fold does not close, since it is
+ * the ellipsis's slot and the pill's whole width once folded. Its own glyph is
+ * what fades out under the ellipsis fading in; the tap belongs to the ellipsis
+ * on top from then on.
+ */
+.top-actions.more-on-fold.collapsed .top-action:nth-last-child(2) {
+  width: calc(var(--fab-size) - 2px);
+  height: calc(var(--fab-size) - 2px);
+  border-radius: calc(var(--fab-radius) - 1px);
+  opacity: 1;
+  pointer-events: none;
+}
+
+.top-actions.more-on-fold.collapsed .top-action:nth-last-child(2) > svg {
+  opacity: 0;
+}
+
+.top-action > svg {
+  transition: opacity 160ms ease;
 }
 
 /* Something is still running behind the fold — a dot says so */
@@ -1154,7 +1246,7 @@ body {
 /* One width in both states — see the fold note above */
 .top-action-more {
   position: relative;
-  width: 54px;
+  width: calc(var(--fab-size) - 2px);
 }
 
 /* Deleting the whole setlist says so before it is tapped */
@@ -1225,7 +1317,8 @@ body {
  */
 .play-screen .floating-title,
 .setlist-detail-screen .floating-title {
-  left: 76px;
+  /* Past the close button: its inset, its box, and a gap. */
+  left: calc(var(--fab-inset) + var(--fab-size) + 8px);
   /* Clears the open pill: 12px inset + four 48px taps + 8px padding + a gap */
   right: 220px;
   max-width: none;
@@ -1237,7 +1330,8 @@ body {
 /* Folded pill gives the width back — the title is centred again while reading */
 .play-screen.tools-collapsed .floating-title,
 .setlist-detail-screen.tools-collapsed .floating-title {
-  right: 76px;
+  /* Folded to one circle, so the same clearance as the close button opposite */
+  right: calc(var(--fab-inset) + var(--fab-size) + 8px);
 }
 
 .play-screen .floating-title.visible,
@@ -1246,34 +1340,29 @@ body {
 }
 
 /* Top scrim: fully opaque behind the status bar so nothing scrolls under the
-   Dynamic Island / notch, then a short fade below the floating header band. */
+   Dynamic Island / notch, then a short fade below the floating header band —
+   see --scrim, which the home header carries as its own background. */
 .floating-scrim {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 76px;
+  height: var(--scrim-height);
   z-index: 29;
   pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    #000 0,
-    #000 0,
-    rgba(0, 0, 0, 0.96) 44px,
-    rgba(0, 0, 0, 0) 100%
-  );
+  background: var(--scrim);
 }
 
 /* Centered song title — plain text, no pill */
 .floating-title {
   position: fixed;
-  top: 12px;
+  top: var(--fab-inset);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 56px;
+  height: var(--fab-size);
   z-index: 30;
   cursor: pointer;
   max-width: 60%;
@@ -1340,8 +1429,7 @@ body {
   overflow-y: auto;
   /* Bottom clearance is exactly the floating control bar's height — the song
      ends as close to the edge as it can without hiding behind the buttons. */
-  padding: 80px 20px 64px
-    20px;
+  padding: calc(var(--scrim-height) + 4px) 20px 64px 20px;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
 }
@@ -1349,6 +1437,211 @@ body {
 /* Hero heading at the top of the song, scrolls away with the content */
 .hero {
   margin: 0 0 22px;
+}
+
+/*
+ * Opening and closing a screen — see src/lib/morph.ts.
+ *
+ * The tapped card and the hero it opens are one shape: the card's box grows into
+ * the hero's while the rest of the page cross-fades behind it, and the way back
+ * runs the same animation in reverse (the browser derives that from the two
+ * snapshots, so there is nothing to write twice). Only ever one element carries
+ * the name at a time, which the class is applied by JS to guarantee.
+ */
+.morphing {
+  view-transition-name: morph-hero;
+}
+
+/* The pair, moving and resizing between the two boxes */
+::view-transition-group(morph-hero) {
+  animation-duration: 340ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  /* Under the floating chrome, which is its own layer above the page */
+  z-index: 1;
+}
+
+/* Card text and hero text are different sizes and faces, so they cross-fade
+   rather than stretch into one another — the box is what carries the motion. */
+::view-transition-old(morph-hero),
+::view-transition-new(morph-hero) {
+  animation-duration: 340ms;
+  animation-timing-function: ease;
+  /* Neither is scaled to the other's aspect: both sit at their own size inside
+     the travelling box, which is what keeps the type from squashing. */
+  height: 100%;
+  object-fit: none;
+  object-position: top left;
+}
+
+/*
+ * The floating chrome crosses with the screens instead of cutting with them.
+ * Each corner is one continuous thing: whatever sits there before the tap and
+ * whatever sits there after share a name, so the browser moves and resizes the
+ * one into the other. Where a corner is empty on one side, the snapshot has no
+ * pair and the `:only-child` rules below give it an entrance or an exit.
+ *
+ * Exactly one element may hold a name in a snapshot or the browser drops the
+ * whole transition, which is what every `:not(.tucked)` here is guarding: the
+ * song screen keeps both a play control and a search field in the bottom corner
+ * and tucks whichever one is not in charge.
+ */
+.back-btn-floating {
+  view-transition-name: chrome-close;
+}
+
+.home-screen .info-btn,
+.top-actions {
+  view-transition-name: chrome-actions;
+}
+
+.search-fab:not(.tucked),
+.play-screen .scroll-control:not(.tucked) {
+  view-transition-name: chrome-fab;
+}
+
+/*
+ * A named element is captured on its own, and a backdrop filter has nothing left
+ * to work on once it is: there is no page behind a snapshot to blur. What gets
+ * captured instead is the filter's own flat layer, unclipped — a hard grey
+ * square for a frame or two where a round blurred button was.
+ *
+ * So the blur stands down for the length of the morph — and only the blur. The
+ * fill it sat in front of stays exactly as it is: `--fab-bg` is 90% opaque, and
+ * a snapshot that translucent composites over the page behind it just as the
+ * blurred original did, so there is nothing to see at either end. (Forcing it
+ * solid instead is visible — the fill pops back to translucent over the lyrics
+ * the moment the morph ends.)
+ */
+.morphing-page .back-btn-floating,
+.morphing-page .home-screen .info-btn,
+.morphing-page .top-actions,
+.morphing-page .search-fab,
+.morphing-page .play-screen .scroll-control {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Above the hero growing underneath them — the chrome is a layer, not content */
+::view-transition-group(chrome-close),
+::view-transition-group(chrome-actions),
+::view-transition-group(chrome-fab) {
+  z-index: 2;
+}
+
+/* The ellipsis becoming the actions pill, and back: the same unfold the pill
+   does when the page scrolls, so arriving at a screen and scrolling up on it
+   look like one movement. Right-anchored, since that edge is the one both
+   shapes share. */
+::view-transition-group(chrome-actions),
+::view-transition-group(chrome-fab) {
+  animation-duration: 380ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+::view-transition-old(chrome-actions),
+::view-transition-new(chrome-actions) {
+  animation-duration: 240ms;
+  height: 100%;
+  object-fit: none;
+  object-position: center right;
+}
+
+/* The corner's glyph changes hands — a lens for a play triangle — while the
+   circle itself holds still, so it reads as one button changing its mind. */
+::view-transition-old(chrome-fab),
+::view-transition-new(chrome-fab) {
+  animation-duration: 220ms;
+  height: 100%;
+  object-fit: none;
+  object-position: center;
+}
+
+/* Nothing to pair with: the close button springs in, the corner that has no
+   counterpart on the other side drops away. */
+::view-transition-new(chrome-close):only-child {
+  animation: chrome-spring-in 420ms cubic-bezier(0.32, 1.28, 0.5, 1) both;
+}
+
+::view-transition-old(chrome-close):only-child {
+  animation: chrome-drop-out 200ms ease both;
+}
+
+::view-transition-new(chrome-actions):only-child,
+::view-transition-new(chrome-fab):only-child {
+  animation: chrome-fade-in 260ms ease both;
+}
+
+::view-transition-old(chrome-actions):only-child,
+::view-transition-old(chrome-fab):only-child {
+  animation: chrome-drop-out 180ms ease both;
+}
+
+@keyframes chrome-spring-in {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes chrome-drop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+}
+
+@keyframes chrome-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+/*
+ * Everything that is not the hero or the chrome — which on the song screen means
+ * the words. The page being left fades out before the one arriving fades in, so
+ * two songs' lyrics are never legible at once; the hero morphs across the gap
+ * between them, and that is what carries the eye while the page is empty.
+ *
+ * This is the root snapshot deliberately, rather than a name on the lyrics: the
+ * lyrics are taller than the screen, and a named element is captured whole, page
+ * after page of it, and composited at a size that has nothing to do with what
+ * was on view. Root is viewport-sized and holds exactly the same content.
+ */
+::view-transition-old(root) {
+  animation: vt-root-out 170ms ease both;
+}
+
+::view-transition-new(root) {
+  animation: vt-root-in 240ms ease both;
+  animation-delay: 150ms;
+}
+
+@keyframes vt-root-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes vt-root-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The transition is skipped outright under reduced motion (morph.ts), so there
+   is nothing to soften here — these only guard a transition already running when
+   the setting flips. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 1ms;
+  }
 }
 
 .hero-title {
@@ -1741,9 +2034,9 @@ body {
    control that grows grows upward from the bar's fixed bottom edge. */
 .play-controls-bar {
   position: fixed;
-  bottom: 12px;
-  left: 12px;
-  right: 12px;
+  bottom: var(--fab-inset);
+  left: var(--fab-inset);
+  right: var(--fab-inset);
   display: flex;
   justify-content: flex-end;
   align-items: flex-end;
@@ -1762,15 +2055,15 @@ body {
   flex-direction: column-reverse;
   align-items: center;
   box-sizing: border-box;
-  width: 56px;
-  height: 56px;
-  border-radius: 28px;
+  width: var(--fab-size);
+  height: var(--fab-size);
+  border-radius: var(--fab-radius);
   overflow: hidden;
-  background: rgba(28, 28, 30, 0.9);
+  background: var(--fab-bg);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  border: var(--fab-border);
+  box-shadow: var(--fab-shadow);
   pointer-events: auto;
   transition:
     height 340ms cubic-bezier(0.32, 1.28, 0.6, 1),
@@ -1796,8 +2089,8 @@ body {
 }
 
 .scroll-control.open {
-  height: 168px;
-  background: rgba(28, 28, 30, 0.9);
+  height: calc(3 * var(--fab-size));
+  background: var(--fab-bg);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   border-color: rgba(255, 255, 255, 0.08);
@@ -1805,8 +2098,8 @@ body {
 
 .control-circle {
   flex-shrink: 0;
-  width: 56px;
-  height: 56px;
+  width: var(--fab-size);
+  height: var(--fab-size);
   border: none;
   background: none;
   border-radius: 50%;
@@ -1836,8 +2129,8 @@ body {
 
 .scroll-speed-btn {
   flex-shrink: 0;
-  width: 56px;
-  height: 56px;
+  width: var(--fab-size);
+  height: var(--fab-size);
   border: none;
   background: none;
   border-radius: 50%;
@@ -1892,33 +2185,32 @@ body {
 .tool-panel {
   position: fixed;
   /* The pill's own corner — the panel replaces it rather than hanging below it */
-  top: 12px;
-  right: 12px;
-  min-height: 56px;
+  top: var(--fab-inset);
+  right: var(--fab-inset);
+  min-height: var(--fab-size);
   /* Above the dismiss layer, so taps inside the panel reach its controls */
   z-index: 31;
   /* As narrow as the popovers this replaced — the controls are rows, not text */
   min-width: 212px;
-  max-width: min(260px, calc(100vw - 24px));
+  max-width: min(260px, calc(100vw - 2 * var(--fab-inset)));
   max-height: calc(100vh - 88px);
   overflow-y: auto;
   overscroll-behavior-y: contain;
   padding: 14px 18px;
-  border-radius: 24px;
+  border-radius: var(--fab-panel-radius);
   /* The pill's own fill, blur and border: the two surfaces are one surface */
-  background: rgba(28, 28, 30, 0.94);
+  background: var(--fab-panel-bg);
   -webkit-backdrop-filter: blur(20px) saturate(1.3);
   backdrop-filter: blur(20px) saturate(1.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 16px 44px rgba(0, 0, 0, 0.7),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border: var(--fab-border);
+  box-shadow: var(--fab-panel-shadow);
 
   visibility: hidden;
   opacity: 0;
   /* Exactly the pill on screen: same corner, same size, same 28px radius */
   clip-path: inset(
-    0 0 calc(100% - var(--morph-height, 56px)) calc(100% - var(--morph-width, 200px)) round 28px
+    0 0 calc(100% - var(--morph-height, 56px)) calc(100% - var(--morph-width, 200px))
+      round var(--fab-radius)
   );
   /* The bounce lives here, where an overshoot can actually render — a clip-path
      inset cannot go below 0, so a springy curve on it would only ever flatten. */
@@ -2453,27 +2745,27 @@ body {
 }
 
 /* Info button and its dropdown (version + force reload) */
-.info-menu {
-  position: relative;
-  flex: none;
-}
 
-/* Sits above the panel so it stays tappable to close, and so the panel appears
-   to unfold from underneath it. Its 28px radius is half its 56px box — the same
-   circle as every other round button in the app — which is also where the
-   panel's reveal starts, so the two shapes coincide exactly at the first frame
-   of the morph. */
+/* Its 28px radius is half its 56px box — the same circle as every other round
+   button in the app — which is also where the panel's reveal starts, so the two
+   shapes coincide exactly at the first frame of the morph. */
 .info-btn {
   position: relative;
-  z-index: 17;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
+  width: var(--fab-size);
+  height: var(--fab-size);
   border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--bg-surface);
+  /* The same surface as the close button and tool pill on the other screens —
+     the fill, border, blur and shadow all come from the shared tokens, so the
+     button reads as the same control wherever it appears. */
+  border: var(--fab-border);
+  background: var(--fab-bg);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: var(--fab-shadow);
   color: var(--text-muted);
   cursor: pointer;
   transition:
@@ -2500,10 +2792,12 @@ body {
     border-color 200ms ease;
 }
 
+/* Over the header band, so a tap anywhere outside the panel closes the menu —
+   the button underneath has faded out by then. */
 .info-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 15;
+  z-index: 30;
 }
 
 /* Grows out of the button instead of appearing beneath it as a separate card.
@@ -2513,22 +2807,29 @@ body {
    rather than animating width/height keeps the text from reflowing mid-morph
    and never needs a measured height, so the content can stay `auto`. */
 .info-dropdown {
-  position: absolute;
-  z-index: 16;
-  top: 0;
-  right: 0;
+  /* Pinned to the button's own corner rather than hung off it, so it can live
+     outside the header and still grow out of exactly that circle. */
+  position: fixed;
+  z-index: 31;
+  top: var(--fab-inset);
+  right: var(--fab-inset);
   min-width: 220px;
-  /* Enough inset that the fatter 28px corners don't bite into the rows */
+  /* Enough inset that the fat corners don't bite into the rows */
   padding: 8px;
-  border-radius: 28px;
-  background: var(--bg-elevated);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  /* The same panel the other screens' pill morphs into — see --fab-panel-*  */
+  border-radius: var(--fab-panel-radius);
+  background: var(--fab-panel-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  backdrop-filter: blur(20px) saturate(1.3);
+  border: var(--fab-border);
+  box-shadow: var(--fab-panel-shadow);
 
   visibility: hidden;
   opacity: 0;
   /* Only the button's own square is showing */
-  clip-path: inset(0 0 calc(100% - 56px) calc(100% - 56px) round 28px);
+  clip-path: inset(
+    0 0 calc(100% - var(--fab-size)) calc(100% - var(--fab-size)) round var(--fab-radius)
+  );
   transition:
     clip-path 260ms cubic-bezier(0.4, 0, 0.9, 0.5),
     opacity 160ms ease 60ms,
@@ -2538,7 +2839,7 @@ body {
 .info-dropdown.open {
   visibility: visible;
   opacity: 1;
-  clip-path: inset(0 0 0 0 round 28px);
+  clip-path: inset(0 0 0 0 round var(--fab-radius));
   transition:
     /* Overshoots slightly on the way out, the way an iOS menu unfurls */
     clip-path 420ms cubic-bezier(0.22, 1.16, 0.36, 1),

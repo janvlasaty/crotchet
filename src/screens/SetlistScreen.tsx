@@ -1,9 +1,21 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getAllSetlists, getSetlist, saveSetlist, deleteSetlist, getAllSongs } from '../lib/db';
+import {
+  getAllSetlists,
+  getSetlist,
+  saveSetlist,
+  deleteSetlist,
+  getAllSongs,
+  getSetlistCache,
+  getWarmLibrary,
+  warmSong,
+} from '../lib/db';
 import { FloatingHeader, useHeaderReveal } from '../components/FloatingHeader';
 import { SearchFab, SearchPlusIcon, songCountLabel } from '../components/SearchFab';
-import { ChevronLeft, Plus, Trash2, X, GripVertical, Pencil, Copy, Ellipsis } from 'lucide-react';
+import { ActionPill } from '../components/ActionPill';
+import { ChevronLeft, Plus, Trash2, X, GripVertical, Pencil, Copy } from 'lucide-react';
+import { useCloseScreen } from '../hooks/useCloseScreen';
+import { morphKey, morphNavigate, morphPair } from '../lib/morph';
 import type { Setlist, Song } from '../types';
 
 /** How long a released row takes to slide into the slot it claimed. */
@@ -62,7 +74,13 @@ export const SetlistScreen: React.FC = () => {
       <div className="setlist-list">
         {setlists.map(sl => (
           <div key={sl.id} className="setlist-item">
-            <div className="setlist-info" onClick={() => navigate(`/setlist/${sl.id}`)}>
+            <div
+              className="setlist-info"
+              {...morphPair(morphKey.setlist(sl.id))}
+              onClick={() =>
+                morphNavigate(morphKey.setlist(sl.id), () => navigate(`/setlist/${sl.id}`))
+              }
+            >
               <div className="setlist-name">{sl.name}</div>
               <div className="setlist-count">{sl.songIds.length} písní</div>
             </div>
@@ -79,19 +97,37 @@ export const SetlistScreen: React.FC = () => {
   );
 };
 
+/**
+ * The setlist as the home screen's rail already knows it — the same cache that
+ * rail is drawn from. IndexedDB answers a frame or two later, and a screen that
+ * arrives empty has no hero for the tapped card to grow into: the browser
+ * snapshots the arriving screen at the end of the transition, so a "Načítám…"
+ * there costs the morph and leaves a plain cross-fade in its place.
+ */
+function cachedSetlist(id: string | undefined): Setlist | null {
+  if (!id) return null;
+  return getSetlistCache().find(sl => sl.id === id) ?? null;
+}
+
 export const SetlistDetailScreen: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const [setlist, setSetlist] = useState<Setlist | null>(null);
-  const [allSongs, setAllSongs] = useState<Song[]>([]);
+  const [setlist, setSetlist] = useState<Setlist | null>(() => cachedSetlist(id));
+  /**
+   * Which setlist the state above belongs to. Duplicating one swaps the id under
+   * this same component, so the cached copy has to be picked up again rather
+   * than the screen showing the setlist it was just copied from.
+   */
+  const [shownId, setShownId] = useState(id);
+  if (shownId !== id) {
+    setShownId(id);
+    setSetlist(cachedSetlist(id));
+  }
+  /** Same reason as the cached setlist above: the rows arrive with the screen. */
+  const [allSongs, setAllSongs] = useState<Song[]>(() => getWarmLibrary() ?? []);
   const [confirmDelete, setConfirmDelete] = useState(false);
   /** Non-null while the rename dialog is open, holding the edited name. */
   const [renameTo, setRenameTo] = useState<string | null>(null);
-  /** The folded pill's panel of named commands. */
-  const [menuOpen, setMenuOpen] = useState(false);
-  /** The pill's box, so the panel can start its reveal as exactly that shape. */
-  const [morph, setMorph] = useState({ width: 200, height: 56 });
-  const pillRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { revealed, heroRef, scrimRef, updateReveal } = useHeaderReveal();
@@ -191,27 +227,8 @@ export const SetlistDetailScreen: React.FC = () => {
     if (el) updateReveal(el);
   }, [updateReveal]);
 
-  /**
-   * Folded into the ellipsis, the three actions still need somewhere to be, so
-   * the pill unfolds into a panel that names them. Growth starts from the pill's
-   * box on screen, measured on the way in, so the panel is the pill's own shape
-   * for its first frame however wide the pill happens to be.
-   */
-  const toggleMenu = useCallback(() => {
-    if (menuOpen) {
-      setMenuOpen(false);
-      return;
-    }
-    const box = pillRef.current?.getBoundingClientRect();
-    setMorph({ width: box?.width ?? 200, height: box?.height ?? 56 });
-    setMenuOpen(true);
-  }, [menuOpen]);
-
-  /** Every command closes the pill behind it before it does anything else. */
-  const runFromMenu = useCallback((action: () => void) => {
-    setMenuOpen(false);
-    action();
-  }, []);
+  /** Back to whatever opened this setlist — home, or the setlist list. */
+  const handleClose = useCloseScreen(id ? morphKey.setlist(id) : undefined, '/');
 
   /*
    * Drag to reorder. The picked-up row tracks the finger exactly and the rows
@@ -323,9 +340,9 @@ export const SetlistDetailScreen: React.FC = () => {
       <FloatingHeader
         title={setlist.name}
         subtitle={songCountLabel(songsInSetlist.length)}
-        icon={<X size={20} strokeWidth={2.5} />}
-        actionLabel="Zavřít"
-        onAction={() => navigate('/')}
+        icon={<ChevronLeft size={22} strokeWidth={2.5} />}
+        actionLabel="Zpět"
+        onAction={handleClose}
         revealed={revealed}
         onTitleClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
         scrimRef={scrimRef}
@@ -337,70 +354,36 @@ export const SetlistDetailScreen: React.FC = () => {
         has scrolled the three fold away and only the ellipsis is left, so the
         list gets the top edge back; the panel behind it names them all.
       */}
-      <div
-        ref={pillRef}
-        className={`top-actions more-on-fold ${revealed ? 'collapsed' : ''} ${
-          menuOpen ? 'morphed' : ''
-        }`}
-        role="group"
-        aria-label="Akce setlistu"
+      <ActionPill
+        label="Akce setlistu"
+        collapsed={revealed}
+        moreOnFold
+        actions={actions}
       >
-        {actions.map(a => (
-          <button
-            key={a.key}
-            className={`top-action ${a.danger ? 'danger' : ''}`}
-            tabIndex={revealed ? -1 : 0}
-            onClick={a.run}
-            title={a.label}
-            aria-label={a.label}
-          >
-            <a.icon size={20} strokeWidth={2.5} />
-          </button>
-        ))}
-        <button
-          className={`top-action top-action-more ${menuOpen ? 'open' : ''}`}
-          tabIndex={revealed ? 0 : -1}
-          onClick={toggleMenu}
-          title="Další"
-          aria-label="Další"
-          aria-expanded={menuOpen}
-        >
-          <Ellipsis size={20} strokeWidth={2.5} />
-        </button>
-      </div>
-
-      {/* Tapping anywhere else folds the panel back into the pill */}
-      {menuOpen && <div className="tool-dismiss" onClick={() => setMenuOpen(false)} />}
-
-      {/* Laid out at full size and revealed by an animated clip-path, so nothing
-          reflows mid-morph — the same surface the song screen's tools use. */}
-      <div
-        className={`tool-panel ${menuOpen ? 'open' : ''}`}
-        role="dialog"
-        aria-label="Akce setlistu"
-        aria-hidden={!menuOpen}
-        style={{
-          '--morph-width': `${morph.width}px`,
-          '--morph-height': `${morph.height}px`,
-        } as React.CSSProperties}
-      >
-        <div className="tool-menu">
-          {actions.map(a => (
-            <button
-              key={a.key}
-              className={`tool-menu-item ${a.danger ? 'danger' : ''}`}
-              onClick={() => runFromMenu(a.run)}
-              tabIndex={menuOpen ? 0 : -1}
-            >
-              <a.icon size={18} strokeWidth={2.5} />
-              {a.label}
-            </button>
-          ))}
-        </div>
-      </div>
+        {(_key, close) => (
+          <div className="tool-menu">
+            {actions.map(a => (
+              <button
+                key={a.key}
+                className={`tool-menu-item ${a.danger ? 'danger' : ''}`}
+                onClick={() => {
+                  // Every command closes the pill behind it before it runs
+                  close();
+                  a.run();
+                }}
+              >
+                <a.icon size={18} strokeWidth={2.5} />
+                {a.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </ActionPill>
 
       <div className="page-scroll" ref={scrollRef} onScroll={handleScroll}>
-        <header className="hero" ref={heroRef}>
+        {/* Grown from the card that opened it, and shrunk back into it on the
+            way out — see src/lib/morph.ts */}
+        <header className="hero" ref={heroRef} {...morphPair(morphKey.setlist(setlist.id))}>
           <h1 className="hero-title">{setlist.name}</h1>
           <div className="hero-meta">
             <span>{songCountLabel(songsInSetlist.length)}</span>
@@ -427,8 +410,15 @@ export const SetlistDetailScreen: React.FC = () => {
                 <span className="setlist-order">{rowNumber(idx)}</span>
                 <div
                   className="setlist-row-main"
+                  {...morphPair(morphKey.song(s.id))}
                   // The play screen finds its place in the queue from the song id
-                  onClick={() => navigate(`/play/${s.id}?setlist=${setlist.id}`)}
+                  onClick={() =>
+                    morphNavigate(
+                      morphKey.song(s.id),
+                      () => navigate(`/play/${s.id}?setlist=${setlist.id}`),
+                      () => warmSong(s.id)
+                    )
+                  }
                 >
                   <div className="song-title">{s.index.title}</div>
                   <div className="song-artist">{s.index.artist}</div>
@@ -505,7 +495,11 @@ export const SetlistDetailScreen: React.FC = () => {
         multiPick
         pickedIds={setlist.songIds}
         onPickSong={handleToggleSong}
-        onPickArtist={artist => navigate(`/artist/${encodeURIComponent(artist)}`)}
+        onPickArtist={artist =>
+          morphNavigate(morphKey.artist(artist), () =>
+            navigate(`/artist/${encodeURIComponent(artist)}`)
+          )
+        }
       />
     </div>
   );

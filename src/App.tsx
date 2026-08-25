@@ -49,8 +49,17 @@ function App() {
 
   const basename = import.meta.env.BASE_URL;
 
+  /*
+   * `useTransitions={false}`: the router's own default wraps every route change
+   * in `React.startTransition`, and a transition update is exactly the one kind
+   * `flushSync` cannot force out. The screen morph flushes the navigation inside
+   * `document.startViewTransition` so the browser can snapshot the page before
+   * and after in one go (see src/lib/morph.ts) — deferred, the new screen landed
+   * after the snapshot had already been taken and every morph came out as a
+   * flicker on the old screen instead.
+   */
   return (
-    <BrowserRouter basename={basename}>
+    <BrowserRouter basename={basename} useTransitions={false}>
       {updateAvailable && (
         <div className="update-banner" onClick={() => applyUpdate()}>
           Nová verze {updateAvailable} — obnovit
