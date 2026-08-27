@@ -244,6 +244,28 @@ export function saveRecentCache(entries: RecentEntry[]): void {
 }
 
 /**
+ * The letter the artist grid was left on. The home screen is returned to far
+ * more often than it is opened cold — from a song, an artist, a setlist — and it
+ * is a fresh mount every time, so without this the filter is back at A on every
+ * trip home and the strip has to be swiped to your place again.
+ */
+const ARTIST_LETTER_KEY = 'zpevnik-artist-letter';
+
+export function getArtistLetter(): string | null {
+  try {
+    return localStorage.getItem(ARTIST_LETTER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function saveArtistLetter(letter: string): void {
+  try {
+    localStorage.setItem(ARTIST_LETTER_KEY, letter);
+  } catch { /* quota or private mode — the grid just opens on A next time */ }
+}
+
+/**
  * A song and its prefs held in memory, so the play screen can paint its hero on
  * the very first frame instead of a frame or two after IndexedDB answers.
  *

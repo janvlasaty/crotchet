@@ -7,7 +7,10 @@ import {
   saveSetlist,
   getRecentCache,
   saveRecentCache,
+  getArtistLetter,
+  saveArtistLetter,
   getSetlistCache,
+  getWarmLibrary,
   importSongs,
   warmSong,
   type RecentEntry,
@@ -16,6 +19,7 @@ import { initSearch } from '../lib/search';
 import { applyUpdate } from '../lib/version';
 import { readSongPack } from '../lib/songpack';
 import { SearchFab, songCountLabel } from '../components/SearchFab';
+import { Logo } from '../components/Logo';
 import { RefreshCw, Plus, Ellipsis, Download } from 'lucide-react';
 import { UNKNOWN_ARTIST, indexLetter } from '../lib/artists';
 import { morphKey, morphNavigate, morphPair } from '../lib/morph';
@@ -33,18 +37,25 @@ type ImportState =
 
 export const HomeScreen: React.FC = () => {
   const navigate = useNavigate();
-  const [songs, setSongs] = useState<Song[]>([]);
+  // The library as it was last read, so the grid is on the page with the screen
+  // rather than a frame or two into it — see `getWarmLibrary`.
+  const [songs, setSongs] = useState<Song[]>(() => getWarmLibrary() ?? []);
   // Straight from cache, so the rail is on screen before IndexedDB answers
   const [recentSongs, setRecentSongs] = useState<RecentEntry[]>(getRecentCache);
   // Cached too, so coming back from a setlist does not blink the rail out
   const [setlists, setSetlists] = useState<Setlist[]>(getSetlistCache);
   const [newName, setNewName] = useState<string | null>(null);
-  const [letter, setLetter] = useState<string | null>(null);
+  // Where the strip was left, so coming home lands on your place in it
+  const [letter, setLetter] = useState<string | null>(getArtistLetter);
   const [infoOpen, setInfoOpen] = useState(false);
   const [importState, setImportState] = useState<ImportState>(null);
   const packInput = useRef<HTMLInputElement>(null);
-  /** The letter the grid is currently showing, and whether it is on its way out. */
-  const [shownLetter, setShownLetter] = useState<string | null>(null);
+  /**
+   * The letter the grid is currently showing, and whether it is on its way out.
+   * Seeded from the remembered one as well: null here means "every group", so
+   * with a warm library the grid would paint unfiltered for a frame first.
+   */
+  const [shownLetter, setShownLetter] = useState<string | null>(getArtistLetter);
   const [leaving, setLeaving] = useState(false);
   const alphaRef = useRef<HTMLDivElement>(null);
   const alphaFrame = useRef<number | null>(null);
@@ -130,15 +141,30 @@ export const HomeScreen: React.FC = () => {
     }, 160);
   }, [paintLens]);
 
-  // A is the opening filter; the strip starts with it under the centre
+  /**
+   * The opening filter, once there are letters to pick from: the one the strip
+   * was left on, or A, or whatever the first letter happens to be. A remembered
+   * letter whose artists have since gone — a deleted or re-imported library —
+   * falls back the same way rather than filtering the grid down to nothing.
+   *
+   * Runs once. After it, the filter belongs to the strip.
+   */
+  const opened = useRef(false);
   useEffect(() => {
-    if (letter !== null || letters.length === 0) return;
-    const start = letters.includes('A') ? 'A' : letters[0];
-    setLetter(start);
+    if (opened.current || letters.length === 0) return;
+    opened.current = true;
+    const start =
+      letter && letters.includes(letter) ? letter : letters.includes('A') ? 'A' : letters[0];
+    if (start !== letter) setLetter(start);
     centred.current = start;
     const key = alphaRef.current?.querySelector<HTMLElement>(`[data-letter="${start}"]`);
     key?.scrollIntoView({ inline: 'center', block: 'nearest' });
   }, [letters, letter]);
+
+  // Remembered as it is chosen, so the next trip home opens here
+  useEffect(() => {
+    if (letter) saveArtistLetter(letter);
+  }, [letter]);
 
   // Fade the old letter's cards out, then swap in the new ones
   useEffect(() => {
@@ -221,7 +247,11 @@ export const HomeScreen: React.FC = () => {
   return (
     <div className="screen home-screen">
       <header className="home-header">
-        <h1>Zpěvník</h1>
+        {/* The mark and the name as one thing, so the ellipsis keeps its corner */}
+        <div className="home-title">
+          <Logo className="home-logo" />
+          <h1>Zpěvník</h1>
+        </div>
 
         <button
           className={`info-btn ${infoOpen ? 'active' : ''}`}

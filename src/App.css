@@ -205,6 +205,28 @@ body {
   padding: var(--fab-inset) var(--fab-inset) 8px 20px;
 }
 
+/* Mark and name travel together, so `space-between` keeps them off the ellipsis */
+.home-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/*
+ * The app's own mark, in the chord orange the installed icon uses, so the app
+ * opens on the same thing the home screen was tapped from. Sized by height —
+ * the rest is a narrow glyph and its width follows (see components/Logo.tsx) —
+ * and set to the title's cap height rather than its line box, which is what
+ * makes the two read as sitting on one baseline.
+ */
+.home-logo {
+  height: 34px;
+  width: auto;
+  flex: none;
+  color: var(--text-chord);
+}
+
 .home-header h1 {
   font-family: var(--font-serif);
   font-size: 32px;
