@@ -11,22 +11,32 @@ import {
   saveArtistLetter,
   getSetlistCache,
   getWarmLibrary,
+  getHomeTab,
+  saveHomeTab,
   importSongs,
   warmSong,
   type RecentEntry,
+  type HomeTab,
 } from '../lib/db';
 import { initSearch } from '../lib/search';
 import { applyUpdate } from '../lib/version';
 import { readSongPack } from '../lib/songpack';
 import { SearchFab, songCountLabel } from '../components/SearchFab';
 import { Logo } from '../components/Logo';
-import { RefreshCw, Plus, Ellipsis, Download } from 'lucide-react';
+import { RefreshCw, Plus, Ellipsis, Download, House, Users, ListMusic } from 'lucide-react';
 import { UNKNOWN_ARTIST, indexLetter } from '../lib/artists';
 import { morphKey, morphNavigate, morphPair } from '../lib/morph';
 import type { Song, Setlist } from '../types';
 
 /** How long the outgoing cards take to fade before the next letter arrives. */
 const GRID_FADE_MS = 150;
+
+/** The three tabs, in the order the pill lays them out. */
+const TABS: { id: HomeTab; label: string; Icon: typeof House }[] = [
+  { id: 'home', label: 'Domů', Icon: House },
+  { id: 'artists', label: 'Interpreti', Icon: Users },
+  { id: 'setlists', label: 'Setlisty', Icon: ListMusic },
+];
 
 /** Progress of a song-pack import, or null when no import is in flight. */
 type ImportState =
@@ -49,6 +59,11 @@ export const HomeScreen: React.FC = () => {
   const [letter, setLetter] = useState<string | null>(getArtistLetter);
   const [infoOpen, setInfoOpen] = useState(false);
   const [importState, setImportState] = useState<ImportState>(null);
+  // Which tab the pill is on, kept across trips home — see `getHomeTab`
+  const [tab, setTab] = useState<HomeTab>(getHomeTab);
+  // The search field grows across the whole bottom of the screen, over where the
+  // tab bar sits, so the bar steps aside while it is open
+  const [searchOpen, setSearchOpen] = useState(false);
   const packInput = useRef<HTMLInputElement>(null);
   /**
    * The letter the grid is currently showing, and whether it is on its way out.
@@ -147,19 +162,26 @@ export const HomeScreen: React.FC = () => {
    * letter whose artists have since gone — a deleted or re-imported library —
    * falls back the same way rather than filtering the grid down to nothing.
    *
-   * Runs once. After it, the filter belongs to the strip.
+   * Runs once per visit to the tab, not once per mount: the strip is unmounted
+   * with its tab and comes back scrolled to its start, so without re-centring
+   * the first swipe after switching back would adopt whatever letter happened to
+   * be near the middle and throw the chosen one away.
    */
-  const opened = useRef(false);
+  const positioned = useRef(false);
   useEffect(() => {
-    if (opened.current || letters.length === 0) return;
-    opened.current = true;
+    if (tab !== 'artists') {
+      positioned.current = false;
+      return;
+    }
+    if (positioned.current || letters.length === 0 || !alphaRef.current) return;
+    positioned.current = true;
     const start =
       letter && letters.includes(letter) ? letter : letters.includes('A') ? 'A' : letters[0];
     if (start !== letter) setLetter(start);
     centred.current = start;
-    const key = alphaRef.current?.querySelector<HTMLElement>(`[data-letter="${start}"]`);
+    const key = alphaRef.current.querySelector<HTMLElement>(`[data-letter="${start}"]`);
     key?.scrollIntoView({ inline: 'center', block: 'nearest' });
-  }, [letters, letter]);
+  }, [letters, letter, tab]);
 
   // Remembered as it is chosen, so the next trip home opens here
   useEffect(() => {
@@ -236,6 +258,16 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
+  /**
+   * Switching tabs: remember it. The scroller is keyed by tab, so the new one
+   * mounts at the top by itself — nothing to reset here.
+   */
+  const pickTab = (next: HomeTab) => {
+    if (next === tab) return;
+    setTab(next);
+    saveHomeTab(next);
+  };
+
   const handleCreateSetlist = async () => {
     if (!newName?.trim()) return;
     const id = Date.now().toString(36);
@@ -299,109 +331,112 @@ export const HomeScreen: React.FC = () => {
         </button>
       </div>
 
-      <div className="home-scroll">
-        {recentSongs.length > 0 && (
-          <section className="home-section">
+      {/* Keyed by tab, so each one arrives with its own short fade-up */}
+      <div className="home-scroll" key={tab}>
+        {tab === 'home' && (
+          <section className="home-section tab-panel">
             <h2>Naposledy hrané</h2>
-            {/* Two rows scrolling sideways, same rail as the play screen */}
-            <div className="card-rail rec-rail">
-              {recentSongs.map(r => (
+            {recentSongs.length === 0 ? (
+              <div className="section-empty">
+                Zatím nic zahraného — najdi píseň lupou v pravém dolním rohu.
+              </div>
+            ) : (
+              <div className="song-grid">
+                {recentSongs.map(r => (
+                  <div
+                    key={r.id}
+                    className="song-card"
+                    {...morphPair(morphKey.song(r.id))}
+                    onClick={() =>
+                      morphNavigate(
+                        morphKey.song(r.id),
+                        () => navigate(`/play/${r.id}`),
+                        () => warmSong(r.id)
+                      )
+                    }
+                  >
+                    <div className="song-card-title">{r.title}</div>
+                    <div className="song-card-artist">{r.artist}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {tab === 'setlists' && (
+          <section className="home-section tab-panel">
+            {/* The whole tab is setlists now, so they get the grid rather than a
+                rail — no sideways scrolling to reach the fifth one. */}
+            <div className="song-grid">
+              {setlists.map(sl => (
                 <div
-                  key={r.id}
+                  key={sl.id}
                   className="song-card"
-                  {...morphPair(morphKey.song(r.id))}
+                  {...morphPair(morphKey.setlist(sl.id))}
                   onClick={() =>
-                    morphNavigate(
-                      morphKey.song(r.id),
-                      () => navigate(`/play/${r.id}`),
-                      () => warmSong(r.id)
+                    morphNavigate(morphKey.setlist(sl.id), () => navigate(`/setlist/${sl.id}`))
+                  }
+                >
+                  <div className="song-card-title">{sl.name}</div>
+                  <div className="song-card-artist">{songCountLabel(sl.songIds.length)}</div>
+                </div>
+              ))}
+
+              {/* Placeholder card that starts a new setlist */}
+              <button className="song-card card-add" onClick={() => setNewName('')}>
+                <Plus size={20} strokeWidth={2.5} />
+                <span>Nový setlist</span>
+              </button>
+            </div>
+          </section>
+        )}
+
+        {tab === 'artists' && (
+          <section className="home-section tab-panel">
+            {/* Picker: whatever letter sits under the centre line is the filter */}
+            <div className="alpha-picker" ref={alphaRef} onScroll={handleAlphaScroll}>
+              {/* No gaps between the buttons: every pixel belongs to a letter,
+                  the separator dots sit inside the padding and take no taps */}
+              <span className="alpha-pad" aria-hidden="true" />
+              {letters.map(l => (
+                <button
+                  key={l}
+                  className={`alpha-key ${letter === l ? 'active' : ''}`}
+                  data-letter={l}
+                  onClick={() => centreLetter(l)}
+                  aria-pressed={letter === l}
+                >
+                  <span className="alpha-glyph">{l}</span>
+                </button>
+              ))}
+              <span className="alpha-pad" aria-hidden="true" />
+            </div>
+
+            {/* Keyed by letter, so switching filter replays the cascade */}
+            <div
+              className={`song-grid reveal-grid ${leaving ? 'leaving' : ''}`}
+              key={shownLetter ?? 'all'}
+            >
+              {visibleGroups.map((g, i) => (
+                <div
+                  key={g.artist}
+                  className="song-card"
+                  style={{ animationDelay: `${Math.min(i * 35, 420)}ms` }}
+                  {...morphPair(morphKey.artist(g.artist))}
+                  onClick={() =>
+                    morphNavigate(morphKey.artist(g.artist), () =>
+                      navigate(`/artist/${encodeURIComponent(g.artist)}`)
                     )
                   }
                 >
-                  <div className="song-card-title">{r.title}</div>
-                  <div className="song-card-artist">{r.artist}</div>
+                  <div className="song-card-title">{g.artist}</div>
+                  <div className="song-card-artist">{songCountLabel(g.count)}</div>
                 </div>
               ))}
             </div>
           </section>
         )}
-
-        <section className="home-section">
-          <h2>Setlisty</h2>
-
-          {/* A rail, like the recent songs above: a bounded set, one card width.
-              Second row only once a single row would run long. */}
-          <div
-            className="card-rail"
-            style={{ '--rail-rows': setlists.length + 1 > 5 ? 2 : 1 } as React.CSSProperties}
-          >
-            {setlists.map(sl => (
-              <div
-                key={sl.id}
-                className="song-card"
-                {...morphPair(morphKey.setlist(sl.id))}
-                onClick={() =>
-                  morphNavigate(morphKey.setlist(sl.id), () => navigate(`/setlist/${sl.id}`))
-                }
-              >
-                <div className="song-card-title">{sl.name}</div>
-                <div className="song-card-artist">{songCountLabel(sl.songIds.length)}</div>
-              </div>
-            ))}
-
-            {/* Placeholder card that starts a new setlist */}
-            <button className="song-card card-add" onClick={() => setNewName('')}>
-              <Plus size={20} strokeWidth={2.5} />
-              <span>Nový setlist</span>
-            </button>
-          </div>
-        </section>
-
-        <section className="home-section">
-          <h2>Interpreti</h2>
-
-          {/* Picker: whatever letter sits under the centre line is the filter */}
-          <div className="alpha-picker" ref={alphaRef} onScroll={handleAlphaScroll}>
-            {/* No gaps between the buttons: every pixel belongs to a letter,
-                the separator dots sit inside the padding and take no taps */}
-            <span className="alpha-pad" aria-hidden="true" />
-            {letters.map(l => (
-              <button
-                key={l}
-                className={`alpha-key ${letter === l ? 'active' : ''}`}
-                data-letter={l}
-                onClick={() => centreLetter(l)}
-                aria-pressed={letter === l}
-              >
-                <span className="alpha-glyph">{l}</span>
-              </button>
-            ))}
-            <span className="alpha-pad" aria-hidden="true" />
-          </div>
-
-          {/* Keyed by letter, so switching filter replays the cascade */}
-          <div
-            className={`song-grid reveal-grid ${leaving ? 'leaving' : ''}`}
-            key={shownLetter ?? 'all'}
-          >
-            {visibleGroups.map((g, i) => (
-              <div
-                key={g.artist}
-                className="song-card"
-                style={{ animationDelay: `${Math.min(i * 35, 420)}ms` }}
-                {...morphPair(morphKey.artist(g.artist))}
-                onClick={() =>
-                  morphNavigate(morphKey.artist(g.artist), () =>
-                    navigate(`/artist/${encodeURIComponent(g.artist)}`)
-                  )
-                }
-              >
-                <div className="song-card-title">{g.artist}</div>
-                <div className="song-card-artist">{songCountLabel(g.count)}</div>
-              </div>
-            ))}
-          </div>
-        </section>
       </div>
 
       {newName !== null && (
@@ -488,7 +523,34 @@ export const HomeScreen: React.FC = () => {
         </>
       )}
 
+      {/* Tab bar: the bottom-left corner, opposite the search button. Icon over
+          label, with a thumb that slides to whichever tab was tapped. */}
+      <div
+        className={`tab-pill ${searchOpen ? 'tucked' : ''}`}
+        role="tablist"
+        aria-label="Sekce"
+      >
+        <span
+          className="tab-pill-thumb"
+          aria-hidden="true"
+          style={{ '--tab-index': TABS.findIndex(t => t.id === tab) } as React.CSSProperties}
+        />
+        {TABS.map(({ id, label, Icon }) => (
+          <button
+            key={id}
+            className={`tab-pill-btn ${tab === id ? 'active' : ''}`}
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => pickTab(id)}
+          >
+            <Icon size={19} strokeWidth={tab === id ? 2.5 : 2} />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+
       <SearchFab
+        onOpenChange={setSearchOpen}
         onPickSong={id =>
           morphNavigate(
             morphKey.song(id),

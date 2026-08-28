@@ -266,6 +266,30 @@ export function saveArtistLetter(letter: string): void {
 }
 
 /**
+ * Which of the home screen's three tabs was last open. Remembered for the same
+ * reason the letter is: coming back from a song is a fresh mount, and landing
+ * on Domů every time would undo the tab you were browsing in.
+ */
+export type HomeTab = 'home' | 'artists' | 'setlists';
+
+const HOME_TAB_KEY = 'zpevnik-home-tab';
+
+export function getHomeTab(): HomeTab {
+  try {
+    const raw = localStorage.getItem(HOME_TAB_KEY);
+    return raw === 'artists' || raw === 'setlists' ? raw : 'home';
+  } catch {
+    return 'home';
+  }
+}
+
+export function saveHomeTab(tab: HomeTab): void {
+  try {
+    localStorage.setItem(HOME_TAB_KEY, tab);
+  } catch { /* quota or private mode — the next open starts on Domů */ }
+}
+
+/**
  * A song and its prefs held in memory, so the play screen can paint its hero on
  * the very first frame instead of a frame or two after IndexedDB answers.
  *

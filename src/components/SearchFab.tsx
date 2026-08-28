@@ -28,6 +28,8 @@ interface SearchFabProps {
   multiPick?: boolean;
   /** Ids already in the target collection; shown with a check. */
   pickedIds?: string[];
+  /** Told when the field opens or closes, for whatever else shares the corner. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -42,6 +44,7 @@ export const SearchFab: React.FC<SearchFabProps> = ({
   icon,
   multiPick = false,
   pickedIds,
+  onOpenChange,
 }) => {
   const [ready, setReady] = useState(isSearchReady());
   const [open, setOpen] = useState(false);
@@ -58,9 +61,17 @@ export const SearchFab: React.FC<SearchFabProps> = ({
   }, [query, ready]);
 
   const openSearch = useCallback(() => {
+    // iOS only raises the keyboard for a focus() made inside the gesture that
+    // caused it — a focus deferred to rAF (or to a state-driven re-render) is
+    // too late and the field opens with no keyboard. So focus first, animate
+    // after, and re-assert it once the pill has grown in case the layout change
+    // dropped it.
+    input.current?.focus();
     setOpen(true);
-    // Focus after the expand starts so iOS keeps the caret inside the growing pill
-    requestAnimationFrame(() => input.current?.focus());
+    onOpenChange?.(true);
+    requestAnimationFrame(() => {
+      if (document.activeElement !== input.current) input.current?.focus();
+    });
     if (isSearchReady()) {
       // Built by the screen after this component mounted — pick it up now
       setReady(true);
@@ -71,13 +82,14 @@ export const SearchFab: React.FC<SearchFabProps> = ({
         setReady(true);
       });
     }
-  }, []);
+  }, [onOpenChange]);
 
   const closeSearch = useCallback(() => {
     setOpen(false);
+    onOpenChange?.(false);
     setQuery('');
     input.current?.blur();
-  }, []);
+  }, [onOpenChange]);
 
   const picked = useMemo(() => new Set(pickedIds ?? []), [pickedIds]);
 
@@ -172,6 +184,8 @@ export const SearchFab: React.FC<SearchFabProps> = ({
           onKeyDown={e => e.key === 'Escape' && closeSearch()}
           autoComplete="off"
           autoCorrect="off"
+          inputMode="search"
+          enterKeyHint="search"
           tabIndex={open ? 0 : -1}
         />
         <button

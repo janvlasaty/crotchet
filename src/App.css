@@ -69,6 +69,7 @@
     rgba(0, 0, 0, 0) 100%
   );
 
+
   /* The shared surface of these controls: a dark blurred pill. */
   --fab-bg: rgba(28, 28, 30, 0.9);
   --fab-border: 1px solid rgba(255, 255, 255, 0.08);
@@ -205,6 +206,92 @@ body {
   padding: var(--fab-inset) var(--fab-inset) 8px 20px;
 }
 
+/*
+ * Tab bar: a floating pill in the bottom-left corner, on the same inset and the
+ * same blurred dark surface as the search button opposite it, so the two read as
+ * a pair of controls sitting on the page rather than a bar attached to its edge.
+ * It rides the keyboard the way the search button does (--kb).
+ */
+.tab-pill {
+  position: fixed;
+  bottom: calc(var(--fab-inset) + var(--kb));
+  left: var(--fab-inset);
+  z-index: 41;
+  display: flex;
+  align-items: stretch;
+  padding: 4px;
+  border-radius: var(--fab-radius);
+  border: var(--fab-border);
+  background: var(--fab-bg);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: var(--fab-shadow);
+  transition:
+    transform 260ms cubic-bezier(0.32, 1.28, 0.6, 1),
+    opacity 200ms ease;
+}
+
+/* Out of the way while the search field owns the bottom of the screen */
+.tab-pill.tucked {
+  transform: scale(0.3);
+  transform-origin: bottom left;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
+ * One element rather than a background on the active button: sliding a single
+ * thumb is what makes the change read as movement between two tabs instead of
+ * one lighting up as another goes out. Its width is a third of the track inside
+ * the padding, so `translateX` in whole multiples of its own width lands it
+ * exactly on each segment.
+ */
+.tab-pill-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / 3);
+  border-radius: calc(var(--fab-radius) - 4px);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateX(calc(var(--tab-index, 0) * 100%));
+  transition: transform 340ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* An iOS tab-bar item: glyph over its label, in one column */
+.tab-pill-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  /* Wide enough for "Interpreti" at 10px, and the same height as the search
+     button beside it once the 4px track padding is counted. */
+  width: 66px;
+  height: calc(var(--fab-size) - 8px);
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: calc(var(--fab-radius) - 4px);
+  transition: color 200ms ease;
+}
+
+.tab-pill-btn.active {
+  color: var(--text);
+}
+
+.tab-pill-btn:active {
+  color: var(--accent);
+}
+
 /* Mark and name travel together, so `space-between` keeps them off the ellipsis */
 .home-title {
   display: flex;
@@ -243,6 +330,23 @@ body {
   padding-bottom: var(--fab-clear);
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+}
+
+/* The tab's content arrives with a short lift, so tapping the pill moves
+   something other than the thumb. */
+.tab-panel {
+  animation: tab-panel-in 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes tab-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .home-section {
@@ -831,7 +935,10 @@ body {
 
 .search-fab input {
   flex: 1;
-  min-width: 0;
+  /* Never fully collapsed: iOS refuses to raise the keyboard for a field with
+     no box at the moment it is focused, and focus lands before the pill grows.
+     The 1px is clipped by the pill's overflow, so nothing shows. */
+  min-width: 1px;
   padding: 0;
   border: none;
   background: none;
