@@ -25,7 +25,10 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api/],
-        globIgnores: ['**/version.json'],
+        // Both are checked with `cache: 'no-store'` and have their own fallback
+        // when the network is gone — precaching them would only serve a stale
+        // copy of each and never let it be replaced.
+        globIgnores: ['**/version.json', '**/neighbors.json'],
         skipWaiting: false,
         clientsClaim: true,
       },

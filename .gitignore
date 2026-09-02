@@ -32,3 +32,8 @@ dump/
 catalog.tsv
 songs.tsv
 ids.txt
+playlists.json
+playlists-titles.json
+id-map.json
+neighbors.json
+public/neighbors.json

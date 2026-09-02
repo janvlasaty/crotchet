@@ -4,11 +4,22 @@
  *
  * Shape: { format: 'crotchet-songpack', version: 1, count, songs: [{ id, chordpro }] }
  * A bare array of the same entries is accepted too, so a hand-made JSON works.
+ *
+ * A pack may also carry `neighbors` — "these songs get played together", for
+ * the recommendations. It travels with the library rather than being fetched
+ * separately: it is only about these songs, it is megabytes on its own, and it
+ * gzips down to almost nothing inside a pack whose ids it keeps repeating.
  */
 
 export interface PackEntry {
   id: string;
   chordpro: string;
+}
+
+export interface SongPack {
+  songs: PackEntry[];
+  /** Verbatim JSON of the neighbours block, or null if the pack has none. */
+  neighbors: string | null;
 }
 
 const FORMAT = 'crotchet-songpack';
@@ -31,7 +42,7 @@ async function readPackText(file: File): Promise<string> {
 }
 
 /** Parse and validate a picked pack file. Throws with a user-facing message. */
-export async function readSongPack(file: File): Promise<PackEntry[]> {
+export async function readSongPack(file: File): Promise<SongPack> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(await readPackText(file));
@@ -67,5 +78,13 @@ export async function readSongPack(file: File): Promise<PackEntry[]> {
   }
 
   if (!songs.length) throw new Error('V balíčku nejsou žádné použitelné písně.');
-  return songs;
+
+  // Kept as text, not as a parsed object: it is stored verbatim and only ever
+  // read back by the recommender, so re-serialising it here would be wasted
+  // work on the largest thing in the file.
+  const block = Array.isArray(parsed) ? null : (parsed as Record<string, unknown>).neighbors;
+  const neighbors =
+    block && typeof block === 'object' && 'neighbors' in block ? JSON.stringify(block) : null;
+
+  return { songs, neighbors };
 }

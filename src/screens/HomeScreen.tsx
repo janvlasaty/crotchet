@@ -21,6 +21,7 @@ import {
 import { initSearch } from '../lib/search';
 import { applyUpdate } from '../lib/version';
 import { readSongPack } from '../lib/songpack';
+import { saveNeighbors } from '../lib/cooccurrence';
 import { SearchFab, songCountLabel } from '../components/SearchFab';
 import { Logo } from '../components/Logo';
 import { RefreshCw, Plus, Ellipsis, Download, House, Users, ListMusic } from 'lucide-react';
@@ -72,6 +73,7 @@ export const HomeScreen: React.FC = () => {
    */
   const [shownLetter, setShownLetter] = useState<string | null>(getArtistLetter);
   const [leaving, setLeaving] = useState(false);
+  const pillRef = useRef<HTMLDivElement>(null);
   const alphaRef = useRef<HTMLDivElement>(null);
   const alphaFrame = useRef<number | null>(null);
   const alphaSettle = useRef<number | null>(null);
@@ -246,10 +248,15 @@ export const HomeScreen: React.FC = () => {
     setImportState({ phase: 'working', done: 0, total: 0 });
     try {
       const pack = await readSongPack(file);
-      setImportState({ phase: 'working', done: 0, total: pack.length });
-      await importSongs(pack, (done, total) => setImportState({ phase: 'working', done, total }));
+      setImportState({ phase: 'working', done: 0, total: pack.songs.length });
+      await importSongs(pack.songs, (done, total) =>
+        setImportState({ phase: 'working', done, total })
+      );
+      // After the songs, so a failed import never leaves neighbours behind for
+      // a library that did not arrive
+      if (pack.neighbors) await saveNeighbors(pack.neighbors);
       await loadLibrary();
-      setImportState({ phase: 'done', count: pack.length });
+      setImportState({ phase: 'done', count: pack.songs.length });
     } catch (err) {
       setImportState({
         phase: 'error',
@@ -268,6 +275,39 @@ export const HomeScreen: React.FC = () => {
     saveHomeTab(next);
   };
 
+  /**
+   * The pill tracks the finger the way an iOS segmented control does: press it
+   * and slide, and whichever tab is under the finger takes over without waiting
+   * for the release. Pointer capture is what keeps the moves arriving after the
+   * finger has left the button it started on, and the nearest-segment fallback
+   * is what stops a finger that strays off the track from dropping the drag.
+   */
+  const tabAtPoint = (clientX: number): HomeTab => {
+    const btns = pillRef.current?.querySelectorAll<HTMLElement>('.tab-pill-btn');
+    let best = tab;
+    let bestDist = Infinity;
+    btns?.forEach((btn, i) => {
+      const r = btn.getBoundingClientRect();
+      const dist =
+        clientX < r.left ? r.left - clientX : clientX > r.right ? clientX - r.right : 0;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = TABS[i].id;
+      }
+    });
+    return best;
+  };
+
+  const handlePillDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    pickTab(tabAtPoint(e.clientX));
+  };
+
+  const handlePillMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+    pickTab(tabAtPoint(e.clientX));
+  };
+
   const handleCreateSetlist = async () => {
     if (!newName?.trim()) return;
     const id = Date.now().toString(36);
@@ -277,22 +317,51 @@ export const HomeScreen: React.FC = () => {
   };
 
   return (
-    <div className="screen home-screen">
+    <div className={`screen home-screen tab-${tab}`}>
       <header className="home-header">
-        {/* The mark and the name as one thing, so the ellipsis keeps its corner */}
-        <div className="home-title">
-          <Logo className="home-logo" />
-          <h1>Zpěvník</h1>
+        <div className="home-header-top">
+          {/* The mark and the name as one thing, so the ellipsis keeps its corner */}
+          <div className="home-title">
+            <Logo className="home-logo" />
+            <h1>Zpěvník</h1>
+          </div>
+
+          <button
+            className={`info-btn ${infoOpen ? 'active' : ''}`}
+            onClick={() => setInfoOpen(o => !o)}
+            aria-label="O aplikaci"
+            aria-expanded={infoOpen}
+          >
+            <Ellipsis size={20} strokeWidth={2.5} />
+          </button>
         </div>
 
-        <button
-          className={`info-btn ${infoOpen ? 'active' : ''}`}
-          onClick={() => setInfoOpen(o => !o)}
-          aria-label="O aplikaci"
-          aria-expanded={infoOpen}
-        >
-          <Ellipsis size={20} strokeWidth={2.5} />
-        </button>
+        {/*
+          The letter picker belongs to the header band rather than to the
+          scrolling page: it stays put while the cards it filters move under it,
+          and it keeps the header's one continuous scrim instead of needing a
+          band of its own. Whichever letter sits under the centre line is the
+          filter.
+        */}
+        {tab === 'artists' && (
+          <div className="alpha-picker" ref={alphaRef} onScroll={handleAlphaScroll}>
+            {/* No gaps between the buttons: every pixel belongs to a letter,
+                the separator dots sit inside the padding and take no taps */}
+            <span className="alpha-pad" aria-hidden="true" />
+            {letters.map(l => (
+              <button
+                key={l}
+                className={`alpha-key ${letter === l ? 'active' : ''}`}
+                data-letter={l}
+                onClick={() => centreLetter(l)}
+                aria-pressed={letter === l}
+              >
+                <span className="alpha-glyph">{l}</span>
+              </button>
+            ))}
+            <span className="alpha-pad" aria-hidden="true" />
+          </div>
+        )}
 
         {/* iOS offers Files/iCloud from here; .gz packs are unzipped in-app */}
         <input
@@ -394,25 +463,6 @@ export const HomeScreen: React.FC = () => {
 
         {tab === 'artists' && (
           <section className="home-section tab-panel">
-            {/* Picker: whatever letter sits under the centre line is the filter */}
-            <div className="alpha-picker" ref={alphaRef} onScroll={handleAlphaScroll}>
-              {/* No gaps between the buttons: every pixel belongs to a letter,
-                  the separator dots sit inside the padding and take no taps */}
-              <span className="alpha-pad" aria-hidden="true" />
-              {letters.map(l => (
-                <button
-                  key={l}
-                  className={`alpha-key ${letter === l ? 'active' : ''}`}
-                  data-letter={l}
-                  onClick={() => centreLetter(l)}
-                  aria-pressed={letter === l}
-                >
-                  <span className="alpha-glyph">{l}</span>
-                </button>
-              ))}
-              <span className="alpha-pad" aria-hidden="true" />
-            </div>
-
             {/* Keyed by letter, so switching filter replays the cascade */}
             <div
               className={`song-grid reveal-grid ${leaving ? 'leaving' : ''}`}
@@ -526,9 +576,12 @@ export const HomeScreen: React.FC = () => {
       {/* Tab bar: the bottom-left corner, opposite the search button. Icon over
           label, with a thumb that slides to whichever tab was tapped. */}
       <div
+        ref={pillRef}
         className={`tab-pill ${searchOpen ? 'tucked' : ''}`}
         role="tablist"
         aria-label="Sekce"
+        onPointerDown={handlePillDown}
+        onPointerMove={handlePillMove}
       >
         <span
           className="tab-pill-thumb"

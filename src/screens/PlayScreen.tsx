@@ -11,9 +11,14 @@ import {
   saveAppSettings,
   getAppSettings,
   getSetlist,
+  getAllSetlists,
+  getSetlistCache,
+  getPlayCounts,
 } from '../lib/db';
 import { parseChordPro, extractChords } from '../lib/parser';
-import { transposeKey, transposeChord } from '../lib/transpose';
+import { transposeKey, transposeChord, keyFromChord } from '../lib/transpose';
+import { buildLocalCooc, loadNeighborFile, mergeCooc, type CoocData } from '../lib/cooccurrence';
+import { playContext, recommend, reasonLabel, type Recommendation } from '../lib/recommend';
 import { playReferenceTone, playClick, Metronome } from '../lib/audio';
 import { SongRenderer } from '../components/SongRenderer';
 import { FloatingHeader, useHeaderReveal } from '../components/FloatingHeader';
@@ -92,17 +97,11 @@ const TOOL_TITLE: Record<ToolMenu | typeof MORE_KEY, string> = {
   more: 'Nastavení',
 };
 
-/** Key implied by a chord: its root, minor only for plain m/min qualities. */
-function keyFromChord(chord: string | undefined): string {
-  if (!chord) return '';
-  const match = /^([A-H][#b]?)(.*)$/.exec(chord.split('/')[0]);
-  if (!match) return '';
-  const [, rawRoot, rest] = match;
-  // Czech H is B, as elsewhere in the app — keeps transposeKey able to parse it
-  const root = rawRoot[0] === 'H' ? `B${rawRoot.slice(1)}` : rawRoot;
-  const minor = /^(m|min)(?!aj)/.test(rest);
-  return minor ? `${root}m` : root;
-}
+/** How many scored suggestions the "Co hrát dál" rail carries. */
+const REC_LIMIT = 12;
+
+/** …and how many of the artist's other songs are offered below them. */
+const ARTIST_REC_LIMIT = 12;
 
 export const PlayScreen: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -144,6 +143,15 @@ export const PlayScreen: React.FC = () => {
   const [atBottom, setAtBottom] = useState(false);
   const [library, setLibrary] = useState<Song[]>([]);
   const [playedIds, setPlayedIds] = useState<Set<string>>(new Set());
+  /** Plays per song — the recommender's tiebreaker. */
+  const [playCounts, setPlayCounts] = useState<Map<string, number> | null>(null);
+  /**
+   * "These get played together", from the user's own setlists and, when the
+   * build ships one, from the precomputed neighbours file. Starts from the
+   * cached setlists so the first ranking has them without waiting on a read.
+   */
+  const [setlists, setSetlists] = useState<Setlist[]>(() => getSetlistCache());
+  const [neighborFile, setNeighborFile] = useState<CoocData | null>(null);
   const [scrollProgress, setScrollProgress] = useState(0);
   /** Autoscroll steps left to the end — one dot each on the ladder, plus one. */
   const [scrollShifts, setScrollShifts] = useState(0);
@@ -234,12 +242,27 @@ export const PlayScreen: React.FC = () => {
       setPrefs(loaded.prefs);
       recordPlay(id);
     });
-    // Pool for the end-of-song recommendations
-    Promise.all([getAllSongs(), getRecentPlays(10)]).then(([allSongs, recentPlays]) => {
-      setLibrary(allSongs);
-      setPlayedIds(new Set([id!, ...recentPlays.map(p => p.songId)]));
-    });
+    // Pool for the end-of-song recommendations, and the signals that rank it
+    Promise.all([getAllSongs(), getRecentPlays(10), getAllSetlists(), getPlayCounts()]).then(
+      ([allSongs, recentPlays, allSetlists, counts]) => {
+        setLibrary(allSongs);
+        setPlayedIds(new Set([id!, ...recentPlays.map(p => p.songId)]));
+        setSetlists(allSetlists);
+        setPlayCounts(counts);
+      }
+    );
   }, [id]);
+
+  // The precomputed neighbours are the same for every song, so once per mount
+  useEffect(() => {
+    let live = true;
+    loadNeighborFile().then(data => {
+      if (live) setNeighborFile(data);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!setlistId) {
@@ -287,21 +310,58 @@ export const PlayScreen: React.FC = () => {
 
   const artist = song?.index.artist?.trim() || '';
 
-  /** Other songs by the same artist — never the open one, never recently played. */
+  /** Chords as written, needed both for the header and for the ranking below. */
+  const songChords = useMemo(() => (parsed ? extractChords(parsed) : []), [parsed]);
+
+  /**
+   * What people play together, both sources summed. Rebuilt when the setlists
+   * change, which is cheap — a handful of lists of a few tens of songs.
+   */
+  const cooc = useMemo(
+    () => mergeCooc(neighborFile, buildLocalCooc(setlists)),
+    [neighborFile, setlists]
+  );
+
+  /**
+   * The ranked suggestions. Scored against the song *as it stands on screen* —
+   * the transpose and the capo are part of the question, because what makes a
+   * good next song is largely whether the hand can stay where it is.
+   */
+  const scoredRecs = useMemo<Recommendation[]>(() => {
+    if (!song || !prefs || !library.length) return [];
+    return recommend(
+      playContext({
+        id: song.id,
+        artist,
+        writtenKey,
+        shapeShift,
+        capo: prefs.capo,
+        chords: songChords,
+        tempo: prefs.tempo || parsed?.tempo || null,
+      }),
+      library,
+      { exclude: playedIds, cooc, playCounts, limit: REC_LIMIT }
+    );
+  }, [
+    song, prefs, library, playedIds, artist, writtenKey, shapeShift, songChords,
+    parsed, cooc, playCounts,
+  ]);
+
+  /**
+   * The artist's other songs, alphabetically — a way into their catalog rather
+   * than a suggestion, so it stays a plain list. Anything the ranked rail above
+   * already offers is dropped: the same card twice reads as a bug.
+   */
   const artistRecs = useMemo(() => {
     if (!artist) return [];
+    const shown = new Set(scoredRecs.map(r => r.song.id));
     return library
-      .filter(s => (s.index.artist?.trim() || '') === artist && !playedIds.has(s.id))
-      .sort((a, b) => a.index.title.localeCompare(b.index.title, 'cs'));
-  }, [library, playedIds, artist]);
-
-  /** Fresh picks from other artists, in random order. */
-  const otherRecs = useMemo(() => {
-    return library
-      .filter(s => !playedIds.has(s.id) && (s.index.artist?.trim() || '') !== artist)
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 10);
-  }, [library, playedIds, artist]);
+      .filter(
+        s => (s.index.artist?.trim() || '') === artist && !playedIds.has(s.id) && !shown.has(s.id)
+      )
+      .sort((a, b) => a.index.title.localeCompare(b.index.title, 'cs'))
+      .slice(0, ARTIST_REC_LIMIT);
+  }, [library, playedIds, artist, scoredRecs]);
 
   const handleChordMode = useCallback((chordMode: ChordMode) => {
     if (!prefs) return;
@@ -573,7 +633,7 @@ export const PlayScreen: React.FC = () => {
     return <div className="screen loading">Načítám…</div>;
   }
 
-  const chords = extractChords(parsed);
+  const chords = songChords;
   // The shapes actually fingered, in the order they first appear — the compact
   // header trades the artist for these, since mid-song that is what you want
   const shapeChords = [...new Set(chords.map(c => transposeChord(c, shapeShift, shapeKey)))];
@@ -595,7 +655,7 @@ export const PlayScreen: React.FC = () => {
   // A long setlist would bury the page; show the next few and offer the rest
   const visibleQueue = queueExpanded ? setlistQueue : setlistQueue.slice(0, QUEUE_PREVIEW);
   const hiddenQueueCount = setlistQueue.length - visibleQueue.length;
-  const showRecs = songEnded && (setlist ? true : artistRecs.length > 0 || otherRecs.length > 0);
+  const showRecs = songEnded && (setlist ? true : scoredRecs.length > 0 || artistRecs.length > 0);
 
   return (
     <div className={`screen play-screen ${revealed ? 'tools-collapsed' : ''}`}>
@@ -814,6 +874,19 @@ export const PlayScreen: React.FC = () => {
 
         {showRecs && !setlist && (
           <div className="song-recommendations">
+            {/* The ranked rail leads: this is the answer to "what now", and the
+                artist's back catalog below it is only a way to keep browsing. */}
+            {scoredRecs.length > 0 && (
+              <section className="rec-section">
+                <h3>Co hrát dál</h3>
+                <RecommendationRail
+                  songs={scoredRecs.map(r => r.song)}
+                  reasons={scoredRecs.map(r => reasonLabel(r.reason, r.song))}
+                  onPick={playRecommendation}
+                  showArtist
+                />
+              </section>
+            )}
             {artistRecs.length > 0 && (
               <section className="rec-section">
                 <div className="rec-head">
@@ -835,17 +908,10 @@ export const PlayScreen: React.FC = () => {
                     </button>
                   </h3>
                 </div>
-                <RecommendationRail songs={artistRecs} onPick={playRecommendation} />
-              </section>
-            )}
-            {otherRecs.length > 0 && (
-              <section className="rec-section">
-                <h3>Další písně</h3>
                 <RecommendationRail
-                  songs={otherRecs}
+                  songs={artistRecs}
                   onPick={playRecommendation}
-                  showArtist
-                  startDelay={artistRecs.length > 0 ? 140 : 0}
+                  startDelay={scoredRecs.length > 0 ? 140 : 0}
                 />
               </section>
             )}
@@ -976,6 +1042,11 @@ interface RecommendationRailProps {
   onPick: (songId: string) => void;
   /** Second line on the card — the artist, where the section isn't one artist. */
   showArtist?: boolean;
+  /**
+   * Why each card is here, positionally matched to `songs`. Null entries print
+   * nothing: a suggestion with no clear single reason should not invent one.
+   */
+  reasons?: Array<string | null>;
   /** Offset for the reveal cascade, so a later section starts after this one. */
   startDelay?: number;
 }
@@ -992,6 +1063,7 @@ const RecommendationRail: React.FC<RecommendationRailProps> = ({
   songs,
   onPick,
   showArtist,
+  reasons,
   startDelay = 0,
 }) => (
   <div className="card-rail rec-rail">
@@ -999,6 +1071,7 @@ const RecommendationRail: React.FC<RecommendationRailProps> = ({
       const column = Math.floor(i / RAIL_ROWS);
       const row = i % RAIL_ROWS;
       const delay = Math.min(MAX_CASCADE, column * COLUMN_STEP + row * ROW_STEP);
+      const reason = reasons?.[i];
       return (
         <div
           key={s.id}
@@ -1007,6 +1080,8 @@ const RecommendationRail: React.FC<RecommendationRailProps> = ({
           {...morphPair(morphKey.song(s.id))}
           onClick={() => onPick(s.id)}
         >
+          {/* Above the title, so a glance down the rail reads the reasons */}
+          {reason && <div className="song-card-reason">{reason}</div>}
           <div className="song-card-title">{s.index.title}</div>
           {showArtist ? (
             <div className="song-card-artist">{s.index.artist}</div>

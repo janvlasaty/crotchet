@@ -108,6 +108,21 @@ export function getShapeKey(songKey: string, capo: number): string {
   return notes[newIdx] + (isMinor ? 'm' : '');
 }
 
+/**
+ * Key implied by a chord: its root, minor only for plain m/min qualities.
+ * Used wherever a song has no `{key}` and its first chord has to stand in.
+ */
+export function keyFromChord(chord: string | undefined): string {
+  if (!chord) return '';
+  const match = /^([A-H][#b]?)(.*)$/.exec(chord.split('/')[0]);
+  if (!match) return '';
+  const [, rawRoot, rest] = match;
+  // Czech H is B, as elsewhere in the app — keeps transposeKey able to parse it
+  const root = rawRoot[0] === 'H' ? `B${rawRoot.slice(1)}` : rawRoot;
+  const minor = /^(m|min)(?!aj)/.test(rest);
+  return minor ? `${root}m` : root;
+}
+
 /** Generate reference frequencies for notes (A4 = 440 Hz) */
 export function noteFrequency(noteIndex: number, octave: number = 4): number {
   // A4 = 440 Hz, A is index 9

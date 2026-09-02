@@ -5,6 +5,7 @@ import { openDB, type IDBPDatabase } from 'idb';
 import type { Song, SongPrefs, PlayRecord, Setlist, SongIndex, ChordMode } from '../types';
 import { parseChordPro, extractPlainText, extractChords, normalizeForSearch } from './parser';
 import { DEFAULT_CHORD_COLOR } from './chordColors';
+import { forgetCandidates } from './recommend';
 
 const DB_NAME = 'zpevnik';
 const DB_VERSION = 2;
@@ -157,6 +158,9 @@ export function getWarmLibrary(): Song[] | null {
 function forgetSongs(): void {
   librarySnapshot = null;
   warmSongs.clear();
+  // Key, capo and chords the recommender memoised per id — a re-import can put
+  // a different song behind the same id
+  forgetCandidates();
 }
 
 /** Get all songs */
@@ -390,6 +394,22 @@ export async function getRecentPlays(limit: number = 20): Promise<PlayRecord[]> 
     if (result.length >= limit) break;
   }
   return result;
+}
+
+/**
+ * How many times each song has been played, over the whole history.
+ *
+ * The recommender's tiebreaker, and nothing more — a song played twenty times
+ * is one this player likes, but that is a far weaker reason to suggest it than
+ * anything about the song in hand.
+ */
+export async function getPlayCounts(): Promise<Map<string, number>> {
+  const db = await getDB();
+  const counts = new Map<string, number>();
+  for (const { songId } of await db.getAll('history')) {
+    counts.set(songId, (counts.get(songId) ?? 0) + 1);
+  }
+  return counts;
 }
 
 // Setlist operations

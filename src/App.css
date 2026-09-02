@@ -62,6 +62,9 @@
    * definition for the song/artist/setlist scrim and the home header alike.
    */
   --scrim-height: 76px;
+  /* The same band with the artists tab's letter picker in it — see
+     .home-screen.tab-artists .home-header */
+  --home-alpha-height: 141px;
   --scrim: linear-gradient(
     to bottom,
     #000 0,
@@ -195,15 +198,64 @@ body {
      dismiss layer and the panel above it. */
   z-index: 29;
   background: var(--scrim);
+  /* A column, since the artists tab hangs its letter picker under the title */
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
   /* The ellipsis is a floating control like any other, so it keeps the app's
      --fab-inset from the top and right edges — the same corner the other
      screens' tool pill sits in, and the same column as the search button
      below. Only the title keeps the page's own 20px left gutter. */
   padding: var(--fab-inset) var(--fab-inset) 8px 20px;
+}
+
+/* The band is a scrim, not a surface: only the controls in it take taps, so a
+   drag that starts over the title still scrolls the cards underneath — the same
+   as `.floating-scrim` on every other screen. */
+.home-header,
+.home-header-top {
+  pointer-events: none;
+}
+
+.home-header .info-btn,
+.home-header .alpha-picker {
+  pointer-events: auto;
+}
+
+.home-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/*
+ * With the letter picker in it the band is taller, and its fade has to start
+ * below the letters rather than through them: --fab-inset + --fab-size (the
+ * title row, as tall as the ellipsis in it) + 14px clear of the title + the 43px
+ * strip, then 16px for the cards to dissolve in. Kept in step with
+ * --home-alpha-height below.
+ */
+.home-screen.tab-artists .home-header {
+  padding-bottom: 16px;
+  background: linear-gradient(
+    to bottom,
+    #000 0,
+    rgba(0, 0, 0, 0.97) 125px,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+/* Full-bleed inside the header, so the letters still run edge to edge and the
+   half-strip spacers can bring the first and last one to the centre line. The
+   top margin is the strip's own air: the letters grow when they reach the centre
+   line, and up against the title they would read as part of it. */
+.home-header .alpha-picker {
+  margin: 14px calc(-1 * var(--fab-inset)) 0 -20px;
+}
+
+.home-screen.tab-artists .home-scroll {
+  padding-top: calc(var(--home-alpha-height) + 4px);
 }
 
 /*
@@ -226,6 +278,11 @@ body {
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   box-shadow: var(--fab-shadow);
+  /* The pill tracks a sliding finger, so the browser must not claim the gesture
+     as a scroll or a text selection half-way through it. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
   transition:
     transform 260ms cubic-bezier(0.32, 1.28, 0.6, 1),
     opacity 200ms ease;
@@ -332,9 +389,18 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* The tab's content arrives with a short lift, so tapping the pill moves
-   something other than the thumb. */
+/*
+ * The tab's content arrives with a short lift, so tapping the pill moves
+ * something other than the thumb.
+ *
+ * The min-height is what keeps the rubber-band alive: iOS only bounces a
+ * scroller that has something to scroll, so a single letter's worth of cards
+ * would sit dead under the finger. Two pixels past the scrollport is enough to
+ * make it scrollable — invisible, but the page now gives under a drag whatever
+ * it is showing.
+ */
 .tab-panel {
+  min-height: calc(100% + 2px);
   animation: tab-panel-in 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
@@ -475,6 +541,23 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/*
+ * Why a recommendation is here — "stejné hmaty", "hraje se spolu". Accent and
+ * uppercase so the rail can be read by its reasons alone, but small enough that
+ * the title still leads the card.
+ */
+.song-card-reason {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 1px;
 }
 
 /* Placeholder card that adds something — lighter ground, accent label */
